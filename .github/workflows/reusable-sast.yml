@@ -78,7 +78,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
           languages: ${{ matrix.language }}
         continue-on-error: true
