@@ -67,7 +67,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: zizmor
-        uses: zizmorcore/zizmor-action@2520132f44b3ed84916048d32e5c7153fc739fe7 # v0.0.3
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           # Soft-fail SARIF upload when Code Scanning is not enabled on the repo
           advanced-security: ${{ inputs.zizmor-advanced-security }}
