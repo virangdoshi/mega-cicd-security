@@ -48,7 +48,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: actionlint
-        uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+        uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
         with:
           args: -color
         continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
