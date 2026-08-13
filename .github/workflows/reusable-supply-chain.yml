@@ -90,7 +90,7 @@ jobs:
           sarif_file: scorecard.sarif
           category: supply-scorecard
         continue-on-error: true
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: supply-scorecard-sarif
           path: scorecard.sarif
@@ -121,7 +121,7 @@ jobs:
             guarddog go scan go.mod --output-format json > guarddog-out/go.json || true
           fi
           ls -la guarddog-out || true
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-guarddog
@@ -147,7 +147,7 @@ jobs:
           go install github.com/interlynk-io/sbomqs@latest
           export PATH="$(go env GOPATH)/bin:$PATH"
           sbomqs score sbom.cdx.json | tee sbomqs.txt || true
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-sbomqs
@@ -177,7 +177,7 @@ jobs:
           if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-pinact-txt
@@ -208,7 +208,7 @@ jobs:
           if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-ratchet-txt
@@ -228,7 +228,7 @@ jobs:
         run: |
           ./slsa-verifier verify-artifact "${{ inputs.slsa-artifact }}" \
             --source-uri "${{ inputs.slsa-source-uri }}" | tee slsa-verify.txt
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-slsa-verify
@@ -247,7 +247,7 @@ jobs:
             --certificate-identity "${{ inputs.cosign-certificate-identity }}" \
             --certificate-oidc-issuer "${{ inputs.cosign-certificate-oidc-issuer || 'https://token.actions.githubusercontent.com' }}" \
             "${{ inputs.image }}" | tee cosign-verify.txt
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-cosign-verify
@@ -279,7 +279,7 @@ jobs:
               exit 1
             fi
           fi
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: supply-security-insights

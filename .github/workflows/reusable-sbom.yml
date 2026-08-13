@@ -55,7 +55,7 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: syft.cdx.json
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-syft
           path: |
@@ -76,7 +76,7 @@ jobs:
         run: |
           trivy fs --format spdx-json --output trivy.spdx.json .
           trivy fs --format cyclonedx --output trivy.cdx.json .
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-trivy
           path: |
@@ -97,7 +97,7 @@ jobs:
       - name: cdxgen
         run: |
           npx --yes @cyclonedx/cdxgen -r -o cdxgen.cdx.json || true
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cdxgen
           path: cdxgen.cdx.json
@@ -123,7 +123,7 @@ jobs:
           if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: sbom-grype-json
@@ -143,7 +143,7 @@ jobs:
           set -euo pipefail
           pip install scancode-toolkit
           scancode -clipeu --json-pp scancode.json . || true
-      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: sbom-scancode-json
