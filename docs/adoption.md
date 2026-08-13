@@ -1,6 +1,6 @@
 # Adoption guide
 
-For step-by-step setup, see the **[Usage guide](usage.md)**. This page focuses on organization rollout choices.
+Step-by-step setup lives in the **[README](../README.md)**. This page covers organization rollout choices only.
 
 ## Choose a consumption model
 

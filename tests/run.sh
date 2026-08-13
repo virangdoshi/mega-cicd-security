@@ -162,7 +162,6 @@ for f in \
   .github/workflows/ci-self-test.yml \
   templates/security-all.yml \
   templates/security-all-scheduled.yml \
-  docs/usage.md \
   docs/scanners.md \
   README.md
 do
