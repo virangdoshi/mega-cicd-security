@@ -8,31 +8,39 @@ cd "$ROOT"
 fail=0
 while IFS= read -r -d '' file; do
   while IFS= read -r line || [[ -n "$line" ]]; do
-    # Trim leading spaces for matching
+    # Trim leading spaces
     trimmed="${line#"${line%%[![:space:]]*}"}"
+    # Support both `uses:` and list form `- uses:`
     case "$trimmed" in
-      uses:*) ;;
-      *) continue ;;
+      uses:*)
+        rest="${trimmed#uses:}"
+        ;;
+      -[[:space:]]uses:*)
+        rest="${trimmed#-}"
+        rest="${rest#"${rest%%[![:space:]]*}"}"
+        rest="${rest#uses:}"
+        ;;
+      *)
+        continue
+        ;;
     esac
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+
     # Local reusable workflows / composite actions
-    if [[ "$trimmed" == uses:+./ ]]; then
+    if [[ "$rest" == ./* ]] || [[ "$rest" == .github/* ]]; then
       continue
     fi
-    if [[ "$trimmed" == uses:./ ]]; then
-      continue
-    fi
-    if echo "$trimmed" | grep -q 'uses: \./'; then
-      continue
-    fi
-    if ! echo "$trimmed" | grep -q '@'; then
+
+    if [[ "$rest" != *@* ]]; then
       echo "UNPINNED ($file): $trimmed"
       fail=1
       continue
     fi
-    ref="${trimmed#*@}"
+
+    ref="${rest#*@}"
     ref="${ref%%[[:space:]]*}"
     ref="${ref%%#*}"
-    if echo "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+    if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
       continue
     fi
     echo "UNPINNED ($file): $trimmed"

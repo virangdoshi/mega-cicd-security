@@ -11,18 +11,18 @@ Point app repos at this library:
 ```yaml
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@v1.0.0
+    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
 ```
 
-Prefer a **release tag** or **commit SHA** (not `@main`) for supply-chain hygiene. Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
+Prefer a **commit SHA** (not `@main`) for supply-chain hygiene. Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
 
 ### Copy-paste templates
 
-Copy files from [`templates/`](../templates/) into the app’s `.github/workflows/`, replace `OWNER/mega-cicd-security`, and pin a tag/SHA.
+Copy files from [`templates/`](../templates/) into the app’s `.github/workflows/`, replace `OWNER/mega-cicd-security`, and pin a commit SHA.
 
 ## Required GitHub settings
 
