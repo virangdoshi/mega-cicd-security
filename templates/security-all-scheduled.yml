@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@main
+    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@382771c0827f92f52418cbc6fb0d78ed9b40ec4a # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH

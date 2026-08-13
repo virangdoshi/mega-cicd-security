@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
-    # One grouped PR instead of a flood of per-action PRs
+    # One grouped PR; Dependabot updates commit SHAs when refs are already SHA-pinned
     open-pull-requests-limit: 1
     labels:
       - dependencies
@@ -14,8 +14,3 @@ updates:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - minor
-          - patch
-    # Major bumps stay separate (safer review) but capped by the limit above
-    ignore: []

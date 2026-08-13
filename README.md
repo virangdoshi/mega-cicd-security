@@ -274,6 +274,8 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 ## Security notes
 
 - Prefer **SHA-pinned** `uses:` for this library and for third-party Actions (already pinned inside this repo).
+- CI enforces pin hashes via [`scripts/check-action-pins.sh`](scripts/check-action-pins.sh) (run from `./tests/run.sh`).
+- Dependabot updates those SHAs in a **single weekly grouped PR**.
 - Grant callers least privilege; only add write permissions when publishing results.
 - This suite finds issues — it does not replace threat modeling, review, or production monitoring.
 

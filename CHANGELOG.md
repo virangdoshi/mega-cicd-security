@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Dependabot now groups GitHub Actions updates into a **single weekly PR** (was one PR per action)
+- Enforce **commit-SHA pins** for all remote Actions (`scripts/check-action-pins.sh`); templates pin to a SHA instead of `@main`
 
 ## [1.0.0] — 2026-08-13
 

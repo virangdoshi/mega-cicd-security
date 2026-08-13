@@ -175,6 +175,16 @@ assert_eq "dedup merges tools" "dedup_ok" "$DEDUP_STATUS"
 rm -rf "$ART" "$DEST_ROOT"
 
 echo
+echo "== action pins =="
+if "$ROOT/scripts/check-action-pins.sh"; then
+  echo "  PASS  action pins"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  action pins"
+  FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "== actionlint =="
 
 ACTIONLINT_BIN="$(mktemp -d)/actionlint"
