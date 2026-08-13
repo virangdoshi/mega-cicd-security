@@ -1,0 +1,26 @@
+# Daily / on-demand full suite with results published as a PR.
+# Requires contents:write and pull-requests:write (granted below).
+# Replace OWNER/mega-cicd-security and prefer a commit SHA instead of @main.
+name: Security — scheduled
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  security-events: write
+  actions: read
+  id-token: write
+  pull-requests: write
+  packages: read
+
+jobs:
+  security:
+    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@main
+    with:
+      selection-mode: detected
+      fail-on-severity: HIGH
+      results-publish-mode: pull-request
+      results-branch: security-results

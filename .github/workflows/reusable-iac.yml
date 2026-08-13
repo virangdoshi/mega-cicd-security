@@ -1,0 +1,280 @@
+name: Reusable IaC Security
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_generic_code:
+        type: string
+        default: "true"
+      has_terraform:
+        type: string
+        default: "true"
+      has_k8s:
+        type: string
+        default: "true"
+      has_cloudformation:
+        type: string
+        default: "true"
+      conftest-policy-path:
+        type: string
+        default: ""
+      enable-checkov:
+        type: boolean
+        default: true
+      enable-kics:
+        type: boolean
+        default: true
+      enable-trivy-config:
+        type: boolean
+        default: true
+      enable-terrascan:
+        type: boolean
+        default: true
+      enable-conftest:
+        type: boolean
+        default: true
+      enable-kube-linter:
+        type: boolean
+        default: true
+      enable-kubeconform:
+        type: boolean
+        default: true
+      enable-kube-score:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  iac-checkov:
+    name: iac-checkov
+    if: inputs.enable-checkov && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@cb92fa252c0bd4612aa02aa4f0a6f405f2ccaa5c # v12.2927.0
+        with:
+          directory: .
+          output_format: sarif
+          output_file_path: console,checkov.sarif
+          soft_fail: ${{ inputs.fail-on-severity == 'NONE' }}
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: checkov.sarif
+          category: iac-checkov
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-checkov-sarif
+          path: checkov.sarif
+          if-no-files-found: warn
+
+  iac-kics:
+    name: iac-kics
+    if: inputs.enable-kics && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: KICS
+        run: |
+          set -euo pipefail
+          curl -sL https://raw.githubusercontent.com/Checkmarx/kics/master/install.sh | bash
+          export PATH="$HOME/.kics/bin:$PATH:/usr/local/bin"
+          kics scan -p . -o kics --report-formats sarif,json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: kics/results.sarif
+          category: iac-kics
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-kics
+          path: kics
+          if-no-files-found: warn
+
+  iac-trivy-config:
+    name: iac-trivy-config
+    if: inputs.enable-trivy-config && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Trivy config
+        run: |
+          SEV="${{ inputs.fail-on-severity }}"
+          ARGS=(config --format sarif --output trivy-config.sarif .)
+          if [[ "$SEV" != "NONE" ]]; then
+            ARGS+=(--exit-code 1 --severity-exit-code "$SEV")
+          fi
+          trivy "${ARGS[@]}" || { [[ "$SEV" == "NONE" ]] || exit 1; }
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: trivy-config.sarif
+          category: iac-trivy-config
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-trivy-config-sarif
+          path: trivy-config.sarif
+          if-no-files-found: warn
+
+  iac-terrascan:
+    name: iac-terrascan
+    if: inputs.enable-terrascan && (inputs.selection-mode == 'all' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Terrascan
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/tenable/terrascan/releases/latest | grep -o 'https://.*/terrascan_[0-9.]*_Linux_x86_64.tar.gz')" -o terrascan.tgz
+          tar -xzf terrascan.tgz terrascan
+          ./terrascan scan -d . -o json > terrascan.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-terrascan-json
+          path: terrascan.json
+          if-no-files-found: warn
+
+  iac-conftest:
+    name: iac-conftest
+    if: inputs.enable-conftest && inputs.conftest-policy-path != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Conftest
+        run: |
+          set -euo pipefail
+          curl -sL https://raw.githubusercontent.com/open-policy-agent/conftest/master/install.sh | bash -s -- -b /usr/local/bin
+          conftest test . -p "${{ inputs.conftest-policy-path }}" --output json | tee conftest.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-conftest-json
+          path: conftest.json
+          if-no-files-found: warn
+
+  iac-kube-linter:
+    name: iac-kube-linter
+    if: inputs.enable-kube-linter && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: kube-linter
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/stackrox/kube-linter/releases/latest | grep -o 'https://.*/kube-linter-linux.tar.gz')" -o kl.tgz
+          tar -xzf kl.tgz
+          ./kube-linter lint . --format json > kube-linter.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-kube-linter-json
+          path: kube-linter.json
+          if-no-files-found: warn
+
+  iac-kubeconform:
+    name: iac-kubeconform
+    if: inputs.enable-kubeconform && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: kubeconform
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/yannh/kubeconform/releases/latest | grep -o 'https://.*/kubeconform-linux-amd64.tar.gz')" -o kc.tgz
+          tar -xzf kc.tgz
+          mapfile -t YAMLS < <(find . -type f \( -name '*.yaml' -o -name '*.yml' \) ! -path './.git/*' | head -n 200)
+          if [[ ${#YAMLS[@]} -eq 0 ]]; then
+            echo "No YAML"; echo '[]' > kubeconform.json; exit 0
+          fi
+          ./kubeconform -summary -output json "${YAMLS[@]}" > kubeconform.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-kubeconform-json
+          path: kubeconform.json
+          if-no-files-found: warn
+
+  iac-kube-score:
+    name: iac-kube-score
+    if: inputs.enable-kube-score && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: kube-score
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/zegl/kube-score/releases/latest | grep -o 'https://.*/kube-score_[0-9.]*_linux_amd64.tar.gz')" -o ks.tgz
+          tar -xzf ks.tgz
+          mapfile -t YAMLS < <(find . -type f \( -name '*.yaml' -o -name '*.yml' \) ! -path './.git/*' | head -n 100)
+          if [[ ${#YAMLS[@]} -eq 0 ]]; then
+            echo "No YAML"; echo '[]' > kube-score.json; exit 0
+          fi
+          ./kube-score score --output-format json "${YAMLS[@]}" > kube-score.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-kube-score-json
+          path: kube-score.json
+          if-no-files-found: warn

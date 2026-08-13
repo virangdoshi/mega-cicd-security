@@ -1,0 +1,66 @@
+name: Reusable Meta (Actions security)
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_actions:
+        type: string
+        default: "true"
+      enable-actionlint:
+        type: boolean
+        default: true
+      enable-zizmor:
+        type: boolean
+        default: true
+      enable-harden-runner:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  meta-actionlint:
+    name: meta-actionlint
+    if: inputs.enable-actionlint && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        if: inputs.enable-harden-runner
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: actionlint
+        uses: rhysd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+        with:
+          args: -color
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+
+  meta-zizmor:
+    name: meta-zizmor
+    if: inputs.enable-zizmor && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        if: inputs.enable-harden-runner
+        uses: step-security/harden-runner@4d991eb9b905ef189e4c376166672c3f2f230481 # v2.11.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: zizmor
+        uses: zizmorcore/zizmor-action@2520132f44b3ed84916048d32e5c7153fc739fe7 # v0.0.3
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}

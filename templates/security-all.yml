@@ -1,0 +1,33 @@
+# Copy into your app repo as .github/workflows/security-all.yml
+# Replace OWNER/mega-cicd-security and prefer a commit SHA instead of @main.
+# Enable Code Scanning in the repo settings so SARIF uploads appear in the Security tab.
+name: Security — all
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+  pull-requests: write
+  packages: read
+
+concurrency:
+  group: security-all-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@main
+    with:
+      selection-mode: detected
+      fail-on-severity: HIGH
+      results-publish-mode: none
+      # enable-scancode: false
+      # image: ""
+      # dockerfile: Dockerfile

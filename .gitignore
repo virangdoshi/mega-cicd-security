@@ -1,0 +1,15 @@
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.log
+security-results/
+tmp/
+.cache/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/

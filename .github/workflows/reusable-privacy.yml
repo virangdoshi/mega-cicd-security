@@ -1,0 +1,176 @@
+name: Reusable Privacy / PII
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_generic_code:
+        type: string
+        default: "true"
+      privacy-paths:
+        type: string
+        default: ""
+      enable-bearer:
+        type: boolean
+        default: true
+      enable-presidio:
+        type: boolean
+        default: true
+      enable-semgrep-privacy:
+        type: boolean
+        default: true
+      enable-application-inspector:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  privacy-bearer:
+    name: privacy-bearer
+    if: inputs.enable-bearer && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Bearer
+        run: |
+          set -euo pipefail
+          curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh
+          bearer scan . --format sarif --output bearer.sarif || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: bearer.sarif
+          category: privacy-bearer
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: privacy-bearer-sarif
+          path: bearer.sarif
+          if-no-files-found: warn
+
+  privacy-presidio:
+    name: privacy-presidio
+    if: inputs.enable-presidio && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+      - name: Presidio Analyzer
+        run: |
+          set -euo pipefail
+          pip install presidio-analyzer
+          python3 - <<'PY'
+          import json, os, pathlib, glob
+          from presidio_analyzer import AnalyzerEngine
+          paths = os.environ.get("PRIVACY_PATHS", "").strip()
+          patterns = paths.split() if paths else ["**/*.csv", "**/*.json", "**/*.txt", "**/*.md", "**/*.yml", "**/*.yaml"]
+          files = []
+          for p in patterns:
+              files.extend(glob.glob(p, recursive=True))
+          files = [f for f in files if pathlib.Path(f).is_file() and ".git" not in f][:50]
+          if not files:
+              print("No privacy-paths matched; skip")
+              pathlib.Path("presidio.json").write_text("[]")
+              raise SystemExit(0)
+          analyzer = AnalyzerEngine()
+          results = []
+          for f in files:
+              try:
+                  text = pathlib.Path(f).read_text(errors="ignore")[:20000]
+              except Exception:
+                  continue
+              hits = analyzer.analyze(text=text, language="en")
+              if hits:
+                  results.append({"file": f, "entities": [h.to_dict() for h in hits]})
+          pathlib.Path("presidio.json").write_text(json.dumps(results, indent=2))
+          print(f"Files scanned: {len(files)}; files with PII signals: {len(results)}")
+          if results and os.environ.get("FAIL_ON", "HIGH") != "NONE":
+              raise SystemExit(1)
+          PY
+        env:
+          PRIVACY_PATHS: ${{ inputs.privacy-paths }}
+          FAIL_ON: ${{ inputs.fail-on-severity }}
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: privacy-presidio-json
+          path: presidio.json
+          if-no-files-found: warn
+
+  privacy-semgrep:
+    name: privacy-semgrep
+    if: inputs.enable-semgrep-privacy && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Semgrep privacy/security rules
+        run: |
+          set -euo pipefail
+          # Overlap with SAST intentional; try secrets/security packs
+          semgrep scan --config p/secrets --config p/security-audit --sarif --output semgrep-privacy.sarif . || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: semgrep-privacy.sarif
+          category: privacy-semgrep
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: privacy-semgrep-sarif
+          path: semgrep-privacy.sarif
+          if-no-files-found: warn
+
+  privacy-application-inspector:
+    name: privacy-application-inspector
+    if: inputs.enable-application-inspector && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4.2.0
+        with:
+          dotnet-version: "8.0.x"
+      - name: Application Inspector
+        run: |
+          set -euo pipefail
+          dotnet tool install --global Microsoft.CST.ApplicationInspector.CLI
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          appinspector analyze -s . -f json -o appinspector.json || true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: privacy-application-inspector
+          path: appinspector.json
+          if-no-files-found: warn

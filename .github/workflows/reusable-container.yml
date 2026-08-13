@@ -1,0 +1,256 @@
+name: Reusable Container Security
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_docker:
+        type: string
+        default: "true"
+      image:
+        description: Image ref to scan (optional)
+        type: string
+        default: ""
+      dockerfile:
+        description: Dockerfile path to build before scan
+        type: string
+        default: "Dockerfile"
+      cosign-certificate-identity:
+        type: string
+        default: ""
+      cosign-certificate-oidc-issuer:
+        type: string
+        default: ""
+      enable-hadolint:
+        type: boolean
+        default: true
+      enable-dockle:
+        type: boolean
+        default: true
+      enable-trivy-image:
+        type: boolean
+        default: true
+      enable-grype-image:
+        type: boolean
+        default: true
+      enable-dive:
+        type: boolean
+        default: true
+      enable-cosign-verify:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+  packages: read
+
+jobs:
+  container-hadolint:
+    name: container-hadolint
+    if: inputs.enable-hadolint && (inputs.selection-mode == 'all' || inputs.has_docker == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Hadolint
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: ${{ inputs.dockerfile }}
+          format: sarif
+          output-file: hadolint.sarif
+          failure-threshold: ${{ inputs.fail-on-severity == 'NONE' && 'error' || 'warning' }}
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: hadolint.sarif
+          category: container-hadolint
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: container-hadolint-sarif
+          path: hadolint.sarif
+          if-no-files-found: warn
+
+  container-dockle:
+    name: container-dockle
+    if: inputs.enable-dockle && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+      - name: Build image if needed
+        id: build
+        run: |
+          set -euo pipefail
+          IMG="${{ inputs.image }}"
+          if [[ -z "$IMG" && -f "${{ inputs.dockerfile }}" ]]; then
+            IMG="local/security-scan:ci"
+            docker build -f "${{ inputs.dockerfile }}" -t "$IMG" .
+          fi
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+      - name: Dockle
+        if: steps.build.outputs.image != ''
+        run: |
+          set -euo pipefail
+          VERSION=$(curl -s https://api.github.com/repos/goodwithtech/dockle/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -sL "https://github.com/goodwithtech/dockle/releases/download/${VERSION}/dockle_${VERSION#v}_Linux-64bit.tar.gz" -o dockle.tgz
+          tar -xzf dockle.tgz
+          ./dockle --exit-code ${{ inputs.fail-on-severity == 'NONE' && '0' || '1' }} --format json --output dockle.json "${{ steps.build.outputs.image }}" || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: container-dockle-json
+          path: dockle.json
+          if-no-files-found: warn
+
+  container-trivy-image:
+    name: container-trivy-image
+    if: inputs.enable-trivy-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+      - name: Resolve image
+        id: build
+        run: |
+          set -euo pipefail
+          IMG="${{ inputs.image }}"
+          if [[ -z "$IMG" && -f "${{ inputs.dockerfile }}" ]]; then
+            IMG="local/security-scan:ci"
+            docker build -f "${{ inputs.dockerfile }}" -t "$IMG" .
+          fi
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+      - name: Install Trivy
+        if: steps.build.outputs.image != ''
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Trivy image
+        if: steps.build.outputs.image != ''
+        run: |
+          SEV="${{ inputs.fail-on-severity }}"
+          ARGS=(image --format sarif --output trivy-image.sarif)
+          if [[ "$SEV" != "NONE" ]]; then
+            ARGS+=(--exit-code 1 --severity-exit-code "$SEV")
+          fi
+          ARGS+=("${{ steps.build.outputs.image }}")
+          trivy "${ARGS[@]}" || { [[ "$SEV" == "NONE" ]] || exit 1; }
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always() && steps.build.outputs.image != ''
+        with:
+          sarif_file: trivy-image.sarif
+          category: container-trivy-image
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: container-trivy-image-sarif
+          path: trivy-image.sarif
+          if-no-files-found: warn
+
+  container-grype-image:
+    name: container-grype-image
+    if: inputs.enable-grype-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+      - name: Resolve image
+        id: build
+        run: |
+          set -euo pipefail
+          IMG="${{ inputs.image }}"
+          if [[ -z "$IMG" && -f "${{ inputs.dockerfile }}" ]]; then
+            IMG="local/security-scan:ci"
+            docker build -f "${{ inputs.dockerfile }}" -t "$IMG" .
+          fi
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+      - name: Grype image
+        if: steps.build.outputs.image != ''
+        uses: anchore/scan-action@869c549e657a088dc0441b08ce4fc0ecdac2bb65 # v5.3.0
+        id: grype
+        with:
+          image: ${{ steps.build.outputs.image }}
+          fail-build: ${{ inputs.fail-on-severity != 'NONE' }}
+          severity-cutoff: ${{ inputs.fail-on-severity == 'NONE' && 'negligible' || inputs.fail-on-severity }}
+          output-format: sarif
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always() && steps.grype.outputs.sarif != ''
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: container-grype-image
+        continue-on-error: true
+
+  container-dive:
+    name: container-dive
+    if: inputs.enable-dive && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
+      - name: Resolve image
+        id: build
+        run: |
+          set -euo pipefail
+          IMG="${{ inputs.image }}"
+          if [[ -z "$IMG" && -f "${{ inputs.dockerfile }}" ]]; then
+            IMG="local/security-scan:ci"
+            docker build -f "${{ inputs.dockerfile }}" -t "$IMG" .
+          fi
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+      - name: Dive
+        if: steps.build.outputs.image != ''
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/wagoodman/dive/releases/latest | grep -o 'https://.*/dive_[0-9.]*_linux_amd64.tar.gz')" -o dive.tgz
+          tar -xzf dive.tgz
+          CI=true ./dive "${{ steps.build.outputs.image }}" | tee dive.txt || true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: container-dive-txt
+          path: dive.txt
+          if-no-files-found: warn
+
+  container-cosign-verify:
+    name: container-cosign-verify
+    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6b3e73ce1ee32e0a4a # v3.7.0
+      - name: Verify
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-identity "${{ inputs.cosign-certificate-identity }}" \
+            --certificate-oidc-issuer "${{ inputs.cosign-certificate-oidc-issuer || 'https://token.actions.githubusercontent.com' }}" \
+            "${{ inputs.image }}" | tee cosign-verify.txt
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: container-cosign-verify
+          path: cosign-verify.txt
+          if-no-files-found: warn

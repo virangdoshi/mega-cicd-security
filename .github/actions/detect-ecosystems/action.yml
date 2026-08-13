@@ -1,0 +1,79 @@
+name: Detect ecosystems
+description: Detect languages and ecosystems in the checked-out repository
+inputs:
+  path:
+    description: Repository root to scan
+    required: false
+    default: "."
+outputs:
+  has_python:
+    description: Python detected
+    value: ${{ steps.detect.outputs.has_python }}
+  has_go:
+    description: Go detected
+    value: ${{ steps.detect.outputs.has_go }}
+  has_java:
+    description: Java detected
+    value: ${{ steps.detect.outputs.has_java }}
+  has_ruby:
+    description: Ruby detected
+    value: ${{ steps.detect.outputs.has_ruby }}
+  has_node:
+    description: Node.js detected
+    value: ${{ steps.detect.outputs.has_node }}
+  has_rust:
+    description: Rust detected
+    value: ${{ steps.detect.outputs.has_rust }}
+  has_php:
+    description: PHP detected
+    value: ${{ steps.detect.outputs.has_php }}
+  has_dotnet:
+    description: .NET detected
+    value: ${{ steps.detect.outputs.has_dotnet }}
+  has_docker:
+    description: Docker detected
+    value: ${{ steps.detect.outputs.has_docker }}
+  has_terraform:
+    description: Terraform detected
+    value: ${{ steps.detect.outputs.has_terraform }}
+  has_k8s:
+    description: Kubernetes/Helm detected
+    value: ${{ steps.detect.outputs.has_k8s }}
+  has_cloudformation:
+    description: CloudFormation detected
+    value: ${{ steps.detect.outputs.has_cloudformation }}
+  has_openapi:
+    description: OpenAPI/Swagger detected
+    value: ${{ steps.detect.outputs.has_openapi }}
+  has_graphql:
+    description: GraphQL detected
+    value: ${{ steps.detect.outputs.has_graphql }}
+  has_binary:
+    description: Binaries detected
+    value: ${{ steps.detect.outputs.has_binary }}
+  has_actions:
+    description: GitHub Actions workflows detected
+    value: ${{ steps.detect.outputs.has_actions }}
+  has_shell:
+    description: Shell scripts detected
+    value: ${{ steps.detect.outputs.has_shell }}
+  has_generic_code:
+    description: Generic source/content detected
+    value: ${{ steps.detect.outputs.has_generic_code }}
+runs:
+  using: composite
+  steps:
+    - name: Detect
+      id: detect
+      shell: bash
+      run: |
+        set -euo pipefail
+        # action_path = <repo>/.github/actions/detect-ecosystems
+        REPO_ROOT="$(cd "${{ github.action_path }}/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/detect-ecosystems.sh" "${{ inputs.path }}" ecosystems.json
+    - name: Upload ecosystems.json
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      with:
+        name: ecosystems-json
+        path: ecosystems.json
+        if-no-files-found: warn

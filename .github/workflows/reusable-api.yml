@@ -1,0 +1,171 @@
+name: Reusable API Static Security
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_openapi:
+        type: string
+        default: "true"
+      has_graphql:
+        type: string
+        default: "true"
+      api-spec-paths:
+        type: string
+        default: ""
+      enable-spectral:
+        type: boolean
+        default: true
+      enable-vacuum:
+        type: boolean
+        default: true
+      enable-graphql-linter:
+        type: boolean
+        default: true
+      enable-ibm-openapi-validator:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  api-spectral:
+    name: api-spectral
+    if: inputs.enable-spectral && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: "20"
+      - name: Spectral
+        run: |
+          set -euo pipefail
+          npm install -g @stoplight/spectral-cli
+          mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' -o -iname 'asyncapi*.yml' -o -iname 'asyncapi*.yaml' -o -iname 'asyncapi*.json' \) ! -path './.git/*' ! -path './node_modules/*')
+          if [[ -n "${{ inputs.api-spec-paths }}" ]]; then
+            # shellcheck disable=SC2206
+            SPECS=(${{ inputs.api-spec-paths }})
+          fi
+          if [[ ${#SPECS[@]} -eq 0 ]]; then
+            echo "No API specs found"; echo '[]' > spectral.json; exit 0
+          fi
+          cat > .spectral.yaml <<'EOF'
+          extends:
+            - spectral:oas
+            - spectral:asyncapi
+          EOF
+          spectral lint "${SPECS[@]}" -f json -o spectral.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: api-spectral-json
+          path: spectral.json
+          if-no-files-found: warn
+
+  api-vacuum:
+    name: api-vacuum
+    if: inputs.enable-vacuum && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: vacuum
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/daveshanley/vacuum/releases/latest | grep -o 'https://.*/vacuum_linux_x86_64.tar.gz' | head -1)" -o vacuum.tgz
+          tar -xzf vacuum.tgz
+          mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' \) ! -path './.git/*')
+          if [[ ${#SPECS[@]} -eq 0 ]]; then
+            echo "No specs"; echo '{}' > vacuum-report.json; exit 0
+          fi
+          ./vacuum lint "${SPECS[0]}" -j > vacuum-report.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: api-vacuum-json
+          path: vacuum-report.json
+          if-no-files-found: warn
+
+  api-graphql-linter:
+    name: api-graphql-linter
+    if: inputs.enable-graphql-linter && (inputs.selection-mode == 'all' || inputs.has_graphql == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: "20"
+      - name: graphql-schema-linter
+        run: |
+          set -euo pipefail
+          npm install -g graphql graphql-schema-linter
+          mapfile -t SCHEMAS < <(find . -type f \( -name '*.graphql' -o -name '*.gql' \) ! -path './.git/*')
+          if [[ ${#SCHEMAS[@]} -eq 0 ]]; then
+            echo "No GraphQL schemas"; echo ok > graphql-linter.txt; exit 0
+          fi
+          graphql-schema-linter "${SCHEMAS[@]}" 2>&1 | tee graphql-linter.txt || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: api-graphql-linter
+          path: graphql-linter.txt
+          if-no-files-found: warn
+
+  api-ibm-openapi-validator:
+    name: api-ibm-openapi-validator
+    if: inputs.enable-ibm-openapi-validator && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: "20"
+      - name: IBM OpenAPI Validator
+        run: |
+          set -euo pipefail
+          npm install -g ibm-openapi-validator
+          mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' \) ! -path './.git/*')
+          if [[ ${#SPECS[@]} -eq 0 ]]; then
+            echo "No specs"; echo '{}' > ibm-openapi.json; exit 0
+          fi
+          lint-openapi "${SPECS[0]}" -j > ibm-openapi.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: api-ibm-openapi-json
+          path: ibm-openapi.json
+          if-no-files-found: warn

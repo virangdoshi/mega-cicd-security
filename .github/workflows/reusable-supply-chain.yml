@@ -1,0 +1,286 @@
+name: Reusable Supply Chain
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: NONE
+      checkout-ref:
+        type: string
+        default: ""
+      has_generic_code:
+        type: string
+        default: "true"
+      has_actions:
+        type: string
+        default: "true"
+      has_python:
+        type: string
+        default: "true"
+      has_node:
+        type: string
+        default: "true"
+      has_go:
+        type: string
+        default: "true"
+      image:
+        type: string
+        default: ""
+      cosign-certificate-identity:
+        type: string
+        default: ""
+      cosign-certificate-oidc-issuer:
+        type: string
+        default: ""
+      slsa-artifact:
+        type: string
+        default: ""
+      slsa-source-uri:
+        type: string
+        default: ""
+      enable-scorecard:
+        type: boolean
+        default: true
+      enable-guarddog:
+        type: boolean
+        default: true
+      enable-sbomqs:
+        type: boolean
+        default: true
+      enable-pinact:
+        type: boolean
+        default: true
+      enable-ratchet:
+        type: boolean
+        default: true
+      enable-slsa-verifier:
+        type: boolean
+        default: true
+      enable-cosign-verify:
+        type: boolean
+        default: true
+      enable-security-insights:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+  id-token: write
+  actions: read
+
+jobs:
+  supply-scorecard:
+    name: supply-scorecard
+    if: inputs.enable-scorecard && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scorecard
+        uses: ossf/scorecard-action@62b2cac7ed8198b15735ed49ab1e5cf35480ba46 # v2.4.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        with:
+          sarif_file: scorecard.sarif
+          category: supply-scorecard
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: supply-scorecard-sarif
+          path: scorecard.sarif
+
+  supply-guarddog:
+    name: supply-guarddog
+    if: inputs.enable-guarddog && (inputs.selection-mode == 'all' || inputs.has_python == 'true' || inputs.has_node == 'true' || inputs.has_go == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+      - name: GuardDog
+        run: |
+          set -euo pipefail
+          pip install guarddog
+          mkdir -p guarddog-out
+          if [[ -f requirements.txt ]]; then
+            guarddog pypi scan requirements.txt --output-format json > guarddog-out/pypi.json || true
+          fi
+          if [[ -f package.json ]]; then
+            guarddog npm scan package.json --output-format json > guarddog-out/npm.json || true
+          fi
+          if [[ -f go.mod ]]; then
+            guarddog go scan go.mod --output-format json > guarddog-out/go.json || true
+          fi
+          ls -la guarddog-out || true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-guarddog
+          path: guarddog-out
+          if-no-files-found: warn
+
+  supply-sbomqs:
+    name: supply-sbomqs
+    if: inputs.enable-sbomqs && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: "1.23.x"
+      - name: Generate SBOM then score
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          syft dir:. -o cyclonedx-json=sbom.cdx.json
+          go install github.com/interlynk-io/sbomqs@latest
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          sbomqs score sbom.cdx.json | tee sbomqs.txt || true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-sbomqs
+          path: |
+            sbomqs.txt
+            sbom.cdx.json
+          if-no-files-found: warn
+
+  supply-pinact:
+    name: supply-pinact
+    if: inputs.enable-pinact && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: "1.23.x"
+      - name: pinact
+        run: |
+          set -euo pipefail
+          go install github.com/suzuki-shunsuke/pinact/cmd/pinact@latest
+          pinact run --check || EXIT=$?
+          EXIT=${EXIT:-0}
+          pinact run --check 2>&1 | tee pinact.txt || true
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-pinact-txt
+          path: pinact.txt
+          if-no-files-found: warn
+
+  supply-ratchet:
+    name: supply-ratchet
+    if: inputs.enable-ratchet && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: "1.23.x"
+      - name: ratchet check
+        run: |
+          set -euo pipefail
+          go install github.com/sethvargo/ratchet@latest
+          mapfile -t WFS < <(find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true)
+          if [[ ${#WFS[@]} -eq 0 ]]; then
+            echo "No workflows"; echo ok > ratchet.txt; exit 0
+          fi
+          ratchet check "${WFS[@]}" 2>&1 | tee ratchet.txt || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-ratchet-txt
+          path: ratchet.txt
+          if-no-files-found: warn
+
+  supply-slsa-verifier:
+    name: supply-slsa-verifier
+    if: inputs.enable-slsa-verifier && inputs.slsa-artifact != '' && inputs.slsa-source-uri != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install slsa-verifier
+        run: |
+          curl -sL "$(curl -s https://api.github.com/repos/slsa-framework/slsa-verifier/releases/latest | grep -o 'https://.*/slsa-verifier-linux-amd64' | head -1)" -o slsa-verifier
+          chmod +x slsa-verifier
+      - name: Verify
+        run: |
+          ./slsa-verifier verify-artifact "${{ inputs.slsa-artifact }}" \
+            --source-uri "${{ inputs.slsa-source-uri }}" | tee slsa-verify.txt
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-slsa-verify
+          path: slsa-verify.txt
+          if-no-files-found: warn
+
+  supply-cosign-verify:
+    name: supply-cosign-verify
+    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6b3e73ce1ee32e0a4a # v3.7.0
+      - name: Verify
+        run: |
+          cosign verify \
+            --certificate-identity "${{ inputs.cosign-certificate-identity }}" \
+            --certificate-oidc-issuer "${{ inputs.cosign-certificate-oidc-issuer || 'https://token.actions.githubusercontent.com' }}" \
+            "${{ inputs.image }}" | tee cosign-verify.txt
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-cosign-verify
+          path: cosign-verify.txt
+          if-no-files-found: warn
+
+  supply-security-insights:
+    name: supply-security-insights
+    if: inputs.enable-security-insights && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Check SECURITY-INSIGHTS.yml
+        run: |
+          set -euo pipefail
+          FOUND=false
+          for f in SECURITY-INSIGHTS.yml SECURITY-INSIGHTS.yaml .github/SECURITY-INSIGHTS.yml security-insights.yml; do
+            if [[ -f "$f" ]]; then
+              echo "Found $f" | tee security-insights.txt
+              FOUND=true
+              break
+            fi
+          done
+          if [[ "$FOUND" != true ]]; then
+            echo "SECURITY-INSIGHTS.yml not found (OpenSSF Security Insights signal)" | tee security-insights.txt
+            if [[ "${{ inputs.fail-on-severity }}" != "NONE" ]]; then
+              exit 1
+            fi
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: supply-security-insights
+          path: security-insights.txt

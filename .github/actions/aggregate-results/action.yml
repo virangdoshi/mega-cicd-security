@@ -1,0 +1,28 @@
+name: Aggregate security results
+description: Build security-results/<date> summary from downloaded artifacts
+inputs:
+  artifacts-dir:
+    description: Directory containing downloaded artifacts
+    required: false
+    default: artifacts
+  out-root:
+    description: Output root directory
+    required: false
+    default: security-results
+  date-stamp:
+    description: Date folder name (UTC YYYY-MM-DD)
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Aggregate
+      shell: bash
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "${{ github.action_path }}/../../.." && pwd)"
+        DATE="${{ inputs.date-stamp }}"
+        if [[ -z "$DATE" ]]; then
+          DATE="$(date -u +%Y-%m-%d)"
+        fi
+        bash "${REPO_ROOT}/scripts/aggregate-results.sh" "${{ inputs.artifacts-dir }}" "${{ inputs.out-root }}" "$DATE"

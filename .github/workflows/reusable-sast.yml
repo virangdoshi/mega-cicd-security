@@ -1,0 +1,337 @@
+name: Reusable SAST
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_generic_code:
+        type: string
+        default: "true"
+      has_python:
+        type: string
+        default: "true"
+      has_go:
+        type: string
+        default: "true"
+      has_ruby:
+        type: string
+        default: "true"
+      has_java:
+        type: string
+        default: "true"
+      has_shell:
+        type: string
+        default: "true"
+      codeql-languages:
+        description: JSON array of CodeQL languages, or empty for auto
+        type: string
+        default: ""
+      enable-codeql:
+        type: boolean
+        default: true
+      enable-semgrep:
+        type: boolean
+        default: true
+      enable-bandit:
+        type: boolean
+        default: true
+      enable-gosec:
+        type: boolean
+        default: true
+      enable-brakeman:
+        type: boolean
+        default: true
+      enable-spotbugs:
+        type: boolean
+        default: true
+      enable-devskim:
+        type: boolean
+        default: true
+      enable-shellcheck:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  sast-codeql:
+    name: sast-codeql
+    if: inputs.enable-codeql && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.codeql-languages || '["javascript-typescript","python","java-kotlin","go","ruby"]') }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        with:
+          languages: ${{ matrix.language }}
+        continue-on-error: true
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        continue-on-error: true
+      - name: Analyze
+        uses: github/codeql-action/analyze@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        with:
+          category: "/language:${{ matrix.language }}"
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+
+  sast-semgrep:
+    name: sast-semgrep
+    if: inputs.enable-semgrep && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Semgrep scan
+        run: |
+          set -euo pipefail
+          semgrep scan --config p/default --sarif --output semgrep.sarif . || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: sast-semgrep
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-semgrep-sarif
+          path: semgrep.sarif
+          if-no-files-found: warn
+
+  sast-bandit:
+    name: sast-bandit
+    if: inputs.enable-bandit && (inputs.selection-mode == 'all' || inputs.has_python == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+      - name: Bandit
+        run: |
+          pip install bandit[toml]
+          bandit -r . -f json -o bandit.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-bandit-json
+          path: bandit.json
+          if-no-files-found: warn
+
+  sast-gosec:
+    name: sast-gosec
+    if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: "1.23.x"
+      - name: Gosec
+        run: |
+          set -euo pipefail
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          if [[ -f go.mod ]]; then
+            gosec -fmt=sarif -out=gosec.sarif ./... || EXIT=$?
+          else
+            echo '{"version":"2.1.0","runs":[]}' > gosec.sarif
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: gosec.sarif
+          category: sast-gosec
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-gosec-sarif
+          path: gosec.sarif
+          if-no-files-found: warn
+
+  sast-brakeman:
+    name: sast-brakeman
+    if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Brakeman
+        run: |
+          set -euo pipefail
+          sudo gem install brakeman
+          if [[ -f Gemfile ]]; then
+            brakeman -f sarif -o brakeman.sarif || EXIT=$?
+          else
+            echo '{"version":"2.1.0","runs":[]}' > brakeman.sarif
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: brakeman.sarif
+          category: sast-brakeman
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-brakeman-sarif
+          path: brakeman.sarif
+          if-no-files-found: warn
+
+  sast-spotbugs:
+    name: sast-spotbugs
+    if: inputs.enable-spotbugs && (inputs.selection-mode == 'all' || inputs.has_java == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: SpotBugs (best-effort)
+        run: |
+          set -euo pipefail
+          if [[ -f pom.xml ]]; then
+            mvn -q -DskipTests package || true
+            curl -sL -o spotbugs.tgz https://github.com/spotbugs/spotbugs/releases/download/4.8.6/spotbugs-4.8.6.tgz
+            tar -xzf spotbugs.tgz
+            ./spotbugs-4.8.6/bin/spotbugs -textui -effort:max -xml:withMessages -output spotbugs.xml target || true
+          elif [[ -f build.gradle || -f build.gradle.kts ]]; then
+            ./gradlew assemble -q || gradle assemble -q || true
+            echo "SpotBugs gradle integration is best-effort; see artifacts if produced" > spotbugs.txt
+          else
+            echo "No Maven/Gradle project; skip" > spotbugs.txt
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-spotbugs
+          path: |
+            spotbugs.xml
+            spotbugs.txt
+          if-no-files-found: warn
+
+  sast-devskim:
+    name: sast-devskim
+    if: inputs.enable-devskim && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Setup .NET
+        uses: actions/setup-dotnet@87b7050bc53ea08284295505d98d2aa94301e852 # v4.2.0
+        with:
+          dotnet-version: "8.0.x"
+      - name: DevSkim
+        run: |
+          set -euo pipefail
+          dotnet tool install --global Microsoft.CST.DevSkim.CLI
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          devskim analyze --source-code . -o sarif -f devskim.sarif || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: devskim.sarif
+          category: sast-devskim
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-devskim-sarif
+          path: devskim.sarif
+          if-no-files-found: warn
+
+  sast-shellcheck:
+    name: sast-shellcheck
+    if: inputs.enable-shellcheck && (inputs.selection-mode == 'all' || inputs.has_shell == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: ShellCheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          mapfile -t FILES < <(find . -type f \( -name '*.sh' -o -name '*.bash' -o -name '*.ksh' -o -name '*.zsh' \) ! -path './.git/*')
+          if [[ ${#FILES[@]} -eq 0 ]]; then
+            echo "No shell scripts found"
+            echo '{"version":"2.1.0","runs":[]}' > shellcheck.sarif
+            exit 0
+          fi
+          # GCC format for artifact; exit non-zero on findings when failing
+          shellcheck -f gcc "${FILES[@]}" | tee shellcheck.txt || EXIT=$?
+          EXIT=${EXIT:-0}
+          # Minimal SARIF-ish placeholder note in json
+          python3 - <<'PY'
+          import json, pathlib
+          text = pathlib.Path("shellcheck.txt").read_text() if pathlib.Path("shellcheck.txt").exists() else ""
+          sarif = {
+            "version": "2.1.0",
+            "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+            "runs": [{
+              "tool": {"driver": {"name": "ShellCheck", "informationUri": "https://www.shellcheck.net/"}},
+              "results": [],
+              "invocations": [{"executionSuccessful": True, "commandLine": "shellcheck"}],
+            }]
+          }
+          pathlib.Path("shellcheck.sarif").write_text(json.dumps(sarif, indent=2))
+          pathlib.Path("shellcheck-raw.txt").write_text(text)
+          PY
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sast-shellcheck
+          path: |
+            shellcheck.txt
+            shellcheck.sarif
+          if-no-files-found: warn

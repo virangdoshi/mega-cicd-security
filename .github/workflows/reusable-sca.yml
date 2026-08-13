@@ -1,0 +1,283 @@
+name: Reusable SCA
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      has_generic_code:
+        type: string
+        default: "true"
+      has_python:
+        type: string
+        default: "true"
+      has_go:
+        type: string
+        default: "true"
+      has_node:
+        type: string
+        default: "true"
+      enable-osv:
+        type: boolean
+        default: true
+      enable-trivy-fs:
+        type: boolean
+        default: true
+      enable-grype:
+        type: boolean
+        default: true
+      enable-dependency-review:
+        type: boolean
+        default: true
+      enable-owasp-dependency-check:
+        type: boolean
+        default: true
+      enable-pip-audit:
+        type: boolean
+        default: true
+      enable-govulncheck:
+        type: boolean
+        default: true
+      enable-retirejs:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
+jobs:
+  sca-osv:
+    name: sca-osv
+    if: inputs.enable-osv && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@764c91816374ff2d8fc2095dab36eecd42d61638 # v1.9.2
+        with:
+          scan-args: |-
+            --recursive
+            --format=sarif
+            --output=osv.sarif
+            ./
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        with:
+          sarif_file: osv.sarif
+          category: sca-osv
+        continue-on-error: true
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: sca-osv-sarif
+          path: osv.sarif
+          if-no-files-found: warn
+
+  sca-trivy-fs:
+    name: sca-trivy-fs
+    if: inputs.enable-trivy-fs && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Trivy filesystem
+        run: |
+          SEV="${{ inputs.fail-on-severity }}"
+          ARGS=(fs --format sarif --output trivy-fs.sarif --severity .)
+          if [[ "$SEV" != "NONE" ]]; then
+            ARGS+=(--exit-code 1 --severity-exit-code "$SEV")
+          fi
+          trivy "${ARGS[@]}" || { echo "trivy exit $?"; [[ "$SEV" == "NONE" ]] || exit 1; }
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always()
+        with:
+          sarif_file: trivy-fs.sarif
+          category: sca-trivy-fs
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-trivy-fs-sarif
+          path: trivy-fs.sarif
+          if-no-files-found: warn
+
+  sca-grype:
+    name: sca-grype
+    if: inputs.enable-grype && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Grype directory scan
+        uses: anchore/scan-action@869c549e657a088dc0441b08ce4fc0ecdac2bb65 # v5.3.0
+        id: grype
+        with:
+          path: "."
+          fail-build: ${{ inputs.fail-on-severity != 'NONE' }}
+          severity-cutoff: ${{ inputs.fail-on-severity == 'NONE' && 'negligible' || inputs.fail-on-severity }}
+          output-format: sarif
+      - uses: github/codeql-action/upload-sarif@9e8d0789d4a0fa9ceb6b1738f7e269594bdd67f0 # v3.28.9
+        if: always() && steps.grype.outputs.sarif != ''
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: sca-grype
+        continue-on-error: true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-grype-sarif
+          path: ${{ steps.grype.outputs.sarif }}
+          if-no-files-found: warn
+
+  sca-dependency-review:
+    name: sca-dependency-review
+    if: |
+      inputs.enable-dependency-review &&
+      github.event_name == 'pull_request' &&
+      (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependency Review
+        uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019 # v4.5.0
+        with:
+          fail-on-severity: ${{ inputs.fail-on-severity == 'NONE' && 'critical' || inputs.fail-on-severity }}
+        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+
+  sca-owasp-dependency-check:
+    name: sca-owasp-dependency-check
+    if: inputs.enable-owasp-dependency-check && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: OWASP Dependency-Check
+        run: |
+          set -euo pipefail
+          VERSION=12.1.0
+          curl -sSL -o dc.zip "https://github.com/jeremylong/DependencyCheck/releases/download/v${VERSION}/dependency-check-${VERSION}-release.zip"
+          unzip -q dc.zip
+          ./dependency-check/bin/dependency-check.sh \
+            --scan . \
+            --format HTML --format JSON \
+            --out odc-report \
+            --enableExperimental || true
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-owasp-dependency-check
+          path: odc-report
+          if-no-files-found: warn
+
+  sca-pip-audit:
+    name: sca-pip-audit
+    if: inputs.enable-pip-audit && (inputs.selection-mode == 'all' || inputs.has_python == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          set -euo pipefail
+          pip install pip-audit
+          if [[ -f requirements.txt ]]; then
+            pip-audit -r requirements.txt -f json -o pip-audit.json || EXIT=$?
+          elif [[ -f pyproject.toml ]]; then
+            pip-audit --progress-spinner off -f json -o pip-audit.json || EXIT=$?
+          else
+            echo "No Python dependency manifests; skipping scan body"
+            echo '{"dependencies":[]}' > pip-audit.json
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-pip-audit-json
+          path: pip-audit.json
+          if-no-files-found: warn
+
+  sca-govulncheck:
+    name: sca-govulncheck
+    if: inputs.enable-govulncheck && (inputs.selection-mode == 'all' || inputs.has_go == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version: "1.23.x"
+      - name: govulncheck
+        run: |
+          set -euo pipefail
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          if [[ -f go.mod ]]; then
+            govulncheck -json ./... > govulncheck.json || EXIT=$?
+          else
+            echo "No go.mod; skip"
+            echo '{}' > govulncheck.json
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-govulncheck-json
+          path: govulncheck.json
+          if-no-files-found: warn
+
+  sca-retirejs:
+    name: sca-retirejs
+    if: inputs.enable-retirejs && (inputs.selection-mode == 'all' || inputs.has_node == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: "20"
+      - name: Retire.js
+        run: |
+          set -euo pipefail
+          npx --yes retire --outputformat json --outputpath retire.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-retirejs-json
+          path: retire.json
+          if-no-files-found: warn
