@@ -149,7 +149,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Grype directory scan
-        uses: anchore/scan-action@869c549e657a088dc0441b08ce4fc0ecdac2bb65 # v5.3.0
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         id: grype
         with:
           path: "."
