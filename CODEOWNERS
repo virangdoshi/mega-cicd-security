@@ -1,0 +1,7 @@
+# Default owners for this security workflows library.
+# Replace with your GitHub org/team or usernames as needed.
+* @virangdoshi
+
+/.github/workflows/ @virangdoshi
+/scripts/ @virangdoshi
+/docs/ @virangdoshi

@@ -1,5 +1,9 @@
 # Mega CI/CD Security
 
+[![CI Self-Test](https://github.com/virangdoshi/mega-cicd-security/actions/workflows/ci-self-test.yml/badge.svg)](https://github.com/virangdoshi/mega-cicd-security/actions/workflows/ci-self-test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/virangdoshi/mega-cicd-security?include_prereleases)](https://github.com/virangdoshi/mega-cicd-security/releases)
+
 **Open-source security scanning for GitHub Actions — kitchen-sink coverage, ecosystem-aware, org-ready.**
 
 Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files.
@@ -57,18 +61,14 @@ concurrency:
 
 jobs:
   security:
-    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-security-full.yml@main
+    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-security-full.yml@v1.0.0
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
 ```
 
-Prefer a **commit SHA** instead of `@main` in production:
-
-```bash
-gh api repos/YOUR_ORG/mega-cicd-security/commits/main --jq .sha
-```
+Prefer a **release tag** (e.g. `@v1.0.0`) or **commit SHA** instead of `@main` in production.
 
 **Or copy a template:**
 

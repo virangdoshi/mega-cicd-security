@@ -51,6 +51,12 @@ on:
       enable-kube-score:
         type: boolean
         default: true
+      enable-kubescape:
+        type: boolean
+        default: true
+      enable-cfn-guard:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -277,4 +283,80 @@ jobs:
         with:
           name: iac-kube-score-json
           path: kube-score.json
+          if-no-files-found: warn
+
+  iac-kubescape:
+    name: iac-kubescape
+    if: inputs.enable-kubescape && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Kubescape
+        run: |
+          set -euo pipefail
+          curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+          export PATH="$HOME/.kubescape:$PATH:/usr/local/bin"
+          # Scan local manifests (frameworks: nsa, mitre, etc.)
+          kubescape scan . --format json --output kubescape.json || EXIT=$?
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-kubescape-json
+          path: kubescape.json
+          if-no-files-found: warn
+
+  iac-cfn-guard:
+    name: iac-cfn-guard
+    if: inputs.enable-cfn-guard && (inputs.selection-mode == 'all' || inputs.has_cloudformation == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: cfn-guard
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/aws-cloudformation/cloudformation-guard/releases/latest | grep -o 'https://.*/cfn-guard-v[^"]*-x86_64-unknown-linux-gnu.tar.gz' | head -1)" -o cfn-guard.tgz || true
+          if [[ ! -f cfn-guard.tgz ]] || [[ ! -s cfn-guard.tgz ]]; then
+            cargo install cfn-guard 2>/dev/null || {
+              curl https://sh.rustup.rs -sSf | sh -s -- -y
+              # shellcheck disable=SC1091
+              source "$HOME/.cargo/env"
+              cargo install cfn-guard
+            }
+            export PATH="$HOME/.cargo/bin:$PATH"
+          else
+            tar -xzf cfn-guard.tgz
+            export PATH="$PWD:$PATH"
+            find . -name 'cfn-guard' -type f -executable | head -1 | xargs -I{} cp {} /usr/local/bin/cfn-guard || true
+          fi
+          mapfile -t TEMPLATES < <(find . -type f \( -iname '*template*.yml' -o -iname '*template*.yaml' -o -iname '*template*.json' -o -name 'cdk.out/**' \) ! -path './.git/*' | head -n 50)
+          # Broader CFN cue files
+          if [[ ${#TEMPLATES[@]} -eq 0 ]]; then
+            mapfile -t TEMPLATES < <(find . -type f \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) ! -path './.git/*' | head -n 30 | while read -r f; do grep -l -E 'AWSTemplateFormatVersion|Resources:' "$f" 2>/dev/null && echo "$f"; done)
+          fi
+          if [[ ${#TEMPLATES[@]} -eq 0 ]]; then
+            echo "No CloudFormation templates; skip" | tee cfn-guard.txt
+            exit 0
+          fi
+          # Validate structure without custom rules (parse check)
+          : > cfn-guard.txt
+          for t in "${TEMPLATES[@]}"; do
+            echo "## $t" >> cfn-guard.txt
+            cfn-guard validate "$t" >> cfn-guard.txt 2>&1 || true
+          done
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" ]] && grep -qi 'FAILED\|error' cfn-guard.txt; then
+            exit 1
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: iac-cfn-guard-txt
+          path: cfn-guard.txt
           if-no-files-found: warn

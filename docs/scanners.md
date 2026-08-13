@@ -12,6 +12,10 @@ Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`,
 | pip-audit | SCA | `has_python` | no | true |
 | govulncheck | SCA | `has_go` | no | true |
 | Retire.js | SCA | `has_node` | no | true |
+| cargo-audit | SCA | `has_rust` | no | true |
+| cargo-deny | SCA | `has_rust` | no | true |
+| bundler-audit | SCA | `has_ruby` | no | true |
+| local-php-security-checker | SCA | `has_php` | no | true |
 | CodeQL | SAST | `has_generic_code` | yes | true |
 | Semgrep | SAST | `has_generic_code` | yes | true |
 | Bandit | SAST | `has_python` | no | true |
@@ -38,6 +42,8 @@ Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`,
 | kube-linter | IaC | `has_k8s` | no | true |
 | kubeconform | IaC | `has_k8s` | no | true |
 | kube-score | IaC | `has_k8s` | no | true |
+| Kubescape | IaC | `has_k8s` | no | true |
+| cfn-guard | IaC | `has_cloudformation` | no | true |
 | Syft | SBOM | `has_generic_code` | n/a | true |
 | Trivy SBOM | SBOM | `has_generic_code` | n/a | true |
 | cdxgen | SBOM | `has_generic_code` | n/a | true |

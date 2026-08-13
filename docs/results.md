@@ -15,7 +15,7 @@ Optionally persist a summary **into git** via `results-publish-mode` on `reusabl
 | `branch` | Commit under `security-results/<YYYY-MM-DD>/` and `security-results/latest/` on branch `security-results` (configurable) |
 | `pull-request` | Same files on `chore/security-results`; open/update a PR into the default branch |
 
-Publishing runs with `if: always()` so failed scanners still produce a summary.
+Publishing runs with `if: always()` so failed scanners still produce a summary. Aggregation also writes **`findings-deduped.json`**: unique findings keyed by rule + location + message, with a severity rollup and which tools reported each issue (SARIF only).
 
 ## Scheduled daily scans
 

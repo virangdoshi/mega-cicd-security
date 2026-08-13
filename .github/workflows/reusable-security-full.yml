@@ -114,6 +114,9 @@ jobs:
       has_python: ${{ needs.detect.outputs.has_python }}
       has_go: ${{ needs.detect.outputs.has_go }}
       has_node: ${{ needs.detect.outputs.has_node }}
+      has_rust: ${{ needs.detect.outputs.has_rust }}
+      has_ruby: ${{ needs.detect.outputs.has_ruby }}
+      has_php: ${{ needs.detect.outputs.has_php }}
 
   sast:
     needs: detect

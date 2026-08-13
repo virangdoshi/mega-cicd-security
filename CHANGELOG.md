@@ -1,0 +1,25 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] — 2026-08-13
+
+### Added
+
+- Reusable workflows for SCA, SAST, secrets, container, IaC, SBOM, supply chain, privacy/PII, static API, malware, and Actions meta-lint
+- `reusable-security-full` orchestrator with ecosystem detection and optional results publish (`none` | `branch` | `pull-request`)
+- Language SCA: cargo-audit, cargo-deny, bundler-audit, local-php-security-checker
+- IaC: Kubescape, cfn-guard (in addition to Checkov/KICS/Terrascan/kube-*)
+- Cross-tool SARIF dedup rollup in `scripts/aggregate-results.sh` (`findings-deduped.json`)
+- Starter templates under `templates/`
+- Local/CI test suite (`./tests/run.sh`) including actionlint
+- Dependabot for GitHub Actions
+- CODEOWNERS and docs for private-library org access
+
+### Fixed
+
+- Ecosystem detection glob quoting bug
+- Meta/zizmor CI failure when Code Scanning SARIF upload is unavailable

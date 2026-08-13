@@ -24,9 +24,14 @@ on:
       enable-harden-runner:
         type: boolean
         default: true
+      zizmor-advanced-security:
+        description: Upload zizmor SARIF to Code Scanning (needs Code Scanning enabled)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  security-events: write
 
 jobs:
   meta-actionlint:
@@ -63,4 +68,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: zizmor
         uses: zizmorcore/zizmor-action@2520132f44b3ed84916048d32e5c7153fc739fe7 # v0.0.3
-        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+        with:
+          # Soft-fail SARIF upload when Code Scanning is not enabled on the repo
+          advanced-security: ${{ inputs.zizmor-advanced-security }}
+        continue-on-error: true

@@ -30,7 +30,9 @@ jobs:
     with:
       selection-mode: detected
       fail-on-severity: NONE
-      has_actions: "true"
+      has_actions: ${{ 'true' }}
+      # Avoid failing CI when Code Scanning is not yet enabled on this library repo
+      zizmor-advanced-security: false
 
   detect-smoke:
     needs: unit-tests

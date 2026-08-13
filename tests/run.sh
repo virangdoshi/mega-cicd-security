@@ -98,23 +98,37 @@ echo "== aggregate-results =="
 ART="$(mktemp -d)"
 DEST_ROOT="$(mktemp -d)"
 echo '{"has_python":true}' >"$ART/ecosystems.json"
-echo '{"version":"2.1.0","runs":[]}' >"$ART/demo.sarif"
-echo 'findings' >"$ART/notes.txt"
-# Oversized file should be skipped in copy but listed
+# Two SARIF files with the same finding from different tools (dedup test)
 python3 - "$ART" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1]) / "huge.sarif"
+import json, pathlib, sys
+art = pathlib.Path(sys.argv[1])
+def sarif(tool, rule="TEST001"):
+    return {
+      "version": "2.1.0",
+      "runs": [{
+        "tool": {"driver": {"name": tool, "rules": [{"id": rule, "defaultConfiguration": {"level": "error"}}]}},
+        "results": [{
+          "ruleId": rule,
+          "level": "error",
+          "message": {"text": "demo finding"},
+          "locations": [{"physicalLocation": {"artifactLocation": {"uri": "src/app.py"}, "region": {"startLine": 10}}}],
+        }],
+      }],
+    }
+(art / "tool-a.sarif").write_text(json.dumps(sarif("Trivy")))
+(art / "tool-b.sarif").write_text(json.dumps(sarif("Grype")))
+(art / "notes.txt").write_text("findings")
+p = art / "huge.sarif"
 p.write_bytes(b"x" * (6 * 1024 * 1024))
+(art / "main.cvd").write_text("db")
 PY
-# ClamAV-like db should be skipped
-echo 'db' >"$ART/main.cvd"
 
 "$ROOT/scripts/aggregate-results.sh" "$ART" "$DEST_ROOT" "2099-01-01" >/dev/null
 
 assert_file "summary exists" "$DEST_ROOT/2099-01-01/summary.md"
 assert_file "latest summary" "$DEST_ROOT/latest/summary.md"
 assert_file "ecosystems copied" "$DEST_ROOT/2099-01-01/ecosystems.json"
-assert_file "sarif copied" "$DEST_ROOT/2099-01-01/demo.sarif"
+assert_file "sarif copied" "$DEST_ROOT/2099-01-01/tool-a.sarif"
 
 if [[ -f "$DEST_ROOT/2099-01-01/main.cvd" ]]; then
   echo "  FAIL  clamav db should not be copied"
@@ -140,7 +154,59 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+assert_file "dedup json exists" "$DEST_ROOT/2099-01-01/findings-deduped.json"
+if grep -q 'Findings rollup' "$DEST_ROOT/2099-01-01/summary.md"; then
+  echo "  PASS  dedup section in summary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  dedup section missing"
+  FAIL=$((FAIL + 1))
+fi
+
+DEDUP_STATUS=$(python3 - "$DEST_ROOT/2099-01-01/findings-deduped.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+multi = [f for f in d["findings"] if len(f["tools"]) > 1]
+print("dedup_ok" if d["total_unique"] >= 1 and d["total_raw"] >= 2 and multi else "dedup_fail")
+PY
+)
+assert_eq "dedup merges tools" "dedup_ok" "$DEDUP_STATUS"
+
 rm -rf "$ART" "$DEST_ROOT"
+
+echo
+echo "== actionlint =="
+
+ACTIONLINT_BIN="$(mktemp -d)/actionlint"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64) ARCH=amd64 ;;
+  arm64|aarch64) ARCH=arm64 ;;
+esac
+# Download latest actionlint release binary
+AL_URL=$(curl -fsSL https://api.github.com/repos/rhysd/actionlint/releases/latest \
+  | python3 -c "import sys,json,re; assets=json.load(sys.stdin).get('assets',[]);
+pat=re.compile(r'actionlint_.*_${OS}_${ARCH}\\.tar\\.gz$');
+print(next((a['browser_download_url'] for a in assets if pat.search(a['name'])), ''))")
+if [[ -n "$AL_URL" ]]; then
+  curl -fsSL "$AL_URL" | tar -xz -C "$(dirname "$ACTIONLINT_BIN")" actionlint
+  chmod +x "$ACTIONLINT_BIN"
+  set +e
+  "$ACTIONLINT_BIN" -color -shellcheck= -pyflakes= .github/workflows/*.yml
+  AL_EXIT=$?
+  set -e
+  if [[ "$AL_EXIT" -eq 0 ]]; then
+    echo "  PASS  actionlint clean"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL  actionlint reported issues (exit $AL_EXIT)"
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo "  FAIL  could not download actionlint"
+  FAIL=$((FAIL + 1))
+fi
 
 echo
 echo "== workflow / template presence =="

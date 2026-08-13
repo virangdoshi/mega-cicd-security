@@ -24,6 +24,15 @@ on:
       has_node:
         type: string
         default: "true"
+      has_rust:
+        type: string
+        default: "true"
+      has_ruby:
+        type: string
+        default: "true"
+      has_php:
+        type: string
+        default: "true"
       enable-osv:
         type: boolean
         default: true
@@ -46,6 +55,18 @@ on:
         type: boolean
         default: true
       enable-retirejs:
+        type: boolean
+        default: true
+      enable-cargo-audit:
+        type: boolean
+        default: true
+      enable-cargo-deny:
+        type: boolean
+        default: true
+      enable-bundler-audit:
+        type: boolean
+        default: true
+      enable-php-security-checker:
         type: boolean
         default: true
 
@@ -280,4 +301,128 @@ jobs:
         with:
           name: sca-retirejs-json
           path: retire.json
+          if-no-files-found: warn
+
+  sca-cargo-audit:
+    name: sca-cargo-audit
+    if: inputs.enable-cargo-audit && (inputs.selection-mode == 'all' || inputs.has_rust == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Install Rust + cargo-audit
+        run: |
+          set -euo pipefail
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          # shellcheck disable=SC1091
+          source "$HOME/.cargo/env"
+          cargo install cargo-audit --locked
+          if [[ -f Cargo.toml ]]; then
+            cargo audit --json > cargo-audit.json || EXIT=$?
+          else
+            echo '{"vulnerabilities":{"list":[]}}' > cargo-audit.json
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-cargo-audit-json
+          path: cargo-audit.json
+          if-no-files-found: warn
+
+  sca-cargo-deny:
+    name: sca-cargo-deny
+    if: inputs.enable-cargo-deny && (inputs.selection-mode == 'all' || inputs.has_rust == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: cargo-deny
+        run: |
+          set -euo pipefail
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          # shellcheck disable=SC1091
+          source "$HOME/.cargo/env"
+          cargo install cargo-deny --locked
+          if [[ -f Cargo.toml ]]; then
+            cargo deny check 2>&1 | tee cargo-deny.txt || EXIT=$?
+          else
+            echo "No Cargo.toml; skip" | tee cargo-deny.txt
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-cargo-deny-txt
+          path: cargo-deny.txt
+          if-no-files-found: warn
+
+  sca-bundler-audit:
+    name: sca-bundler-audit
+    if: inputs.enable-bundler-audit && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: bundler-audit
+        run: |
+          set -euo pipefail
+          sudo gem install bundler-audit
+          if [[ -f Gemfile.lock ]] || [[ -f Gemfile ]]; then
+            bundle-audit check --update 2>&1 | tee bundler-audit.txt || EXIT=$?
+          else
+            echo "No Gemfile; skip" | tee bundler-audit.txt
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-bundler-audit-txt
+          path: bundler-audit.txt
+          if-no-files-found: warn
+
+  sca-php-security-checker:
+    name: sca-php-security-checker
+    if: inputs.enable-php-security-checker && (inputs.selection-mode == 'all' || inputs.has_php == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: local-php-security-checker
+        run: |
+          set -euo pipefail
+          curl -sL "$(curl -s https://api.github.com/repos/fabpot/local-php-security-checker/releases/latest | grep -o 'https://.*/local-php-security-checker_[0-9.]*_linux_amd64' | head -1)" -o php-security-checker
+          chmod +x php-security-checker
+          if [[ -f composer.lock ]]; then
+            ./php-security-checker --format=json > php-security.json || EXIT=$?
+          else
+            echo '[]' > php-security.json
+            echo "No composer.lock; skip"
+            EXIT=0
+          fi
+          EXIT=${EXIT:-0}
+          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+            exit "$EXIT"
+          fi
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        if: always()
+        with:
+          name: sca-php-security-json
+          path: php-security.json
           if-no-files-found: warn
