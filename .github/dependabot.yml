@@ -4,7 +4,18 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+      day: monday
+    # One grouped PR instead of a flood of per-action PRs
+    open-pull-requests-limit: 1
     labels:
       - dependencies
       - github-actions
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    # Major bumps stay separate (safer review) but capped by the limit above
+    ignore: []
