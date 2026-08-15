@@ -76,7 +76,14 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
+        run: |
+          set -euo pipefail
+          VERSION=0.74.0
+          curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o trivy.tgz
+          bash scripts/verify-sha256.sh trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+          tar -xzf trivy.tgz
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+
       - name: Trivy SBOM
         run: |
           trivy fs --format spdx-json --output trivy.spdx.json .
@@ -193,8 +200,7 @@ jobs:
       - name: ScanCode
         run: |
           set -euo pipefail
-          # No hashed requirements file yet; version pin is still better than unpinned
-          pip install 'scancode-toolkit==32.3.0'
+          pip install --require-hashes --only-binary=:all: -r "${GITHUB_WORKSPACE}/.github/pinned/scancode-toolkit.txt"
           scancode -clipeu --json-pp scancode.json . || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
