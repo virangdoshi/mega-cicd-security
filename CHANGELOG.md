@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Cross-repo callers: resolve `.github/pinned/*` and `scripts/verify-sha256.sh` via new `scankit-root` composite action (`github.action_path`) instead of `GITHUB_WORKSPACE` (which is the caller checkout)
 - TruffleHog: replace broken `--only-verified=false` with `--results=verified,unknown`; honor `fail-on-severity: NONE` for Gitleaks/TruffleHog via `continue-on-error`
+- Regenerate `flare-capa` / `presidio-analyzer` hash pins with `pip-compile --allow-unsafe` (pip/setuptools); bump ratchet job to Go 1.24
 - Restore `reusable-security-full` workflow-level permission ceiling (`contents`/`pull-requests`/`security-events: write`) so nested job scopes are valid for cross-repo callers (avoids silent `startup_failure`)
 
 ### Security
