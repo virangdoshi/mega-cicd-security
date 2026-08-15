@@ -25,6 +25,11 @@ jobs:
 
   meta:
     needs: unit-tests
+    # Caller must grant what reusable-meta's zizmor job requests, or the
+    # workflow fails at startup before unit-tests run.
+    permissions:
+      contents: read
+      security-events: write
     uses: ./.github/workflows/reusable-meta.yml
     with:
       selection-mode: detected
