@@ -14,8 +14,8 @@ This repository publishes reusable GitHub Actions workflows. Use a **commit SHA*
 
 Please **do not** open a public issue for security problems in this library.
 
-1. Use GitHub **Private vulnerability reporting** on this repository (Security → Report a vulnerability), or
-2. Email the maintainers listed in [CODEOWNERS](CODEOWNERS) with a description, impact, and reproduction steps.
+1. Use GitHub **Private vulnerability reporting**: https://github.com/virangdoshi/scankit/security/advisories/new
+2. Or contact the maintainers listed in [CODEOWNERS](CODEOWNERS) with a description, impact, and reproduction steps.
 
 We aim to acknowledge reports within **7 days** and to ship a fix or mitigation for confirmed issues as quickly as practical.
 
