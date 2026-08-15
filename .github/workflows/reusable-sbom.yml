@@ -83,7 +83,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Install Trivy
         run: |
           set -euo pipefail
@@ -208,7 +208,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: ScanCode
         run: |
           set -euo pipefail

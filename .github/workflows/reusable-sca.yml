@@ -152,7 +152,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Install Trivy
         run: |
           set -euo pipefail
@@ -268,7 +268,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -371,7 +371,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Install Rust + cargo-audit
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
@@ -408,7 +408,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: cargo-deny
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
@@ -476,7 +476,7 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Resolve scankit root
         id: scankit
-        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: local-php-security-checker
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
