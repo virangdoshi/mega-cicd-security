@@ -46,18 +46,29 @@ fi
 changed_count=0
 
 if [[ "$MODE" == "diff" ]]; then
-  if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
-    echo "diff mode requires base and head SHAs" >&2
-    exit 1
-  fi
-  # List files added/modified (not deleted) between base and head
-  while IFS= read -r path; do
-    [[ -z "$path" ]] && continue
-    if [[ -e "$path" || -L "$path" ]]; then
-      printf '%s\n' "$path" >>"$CHANGED_FILE"
-      changed_count=$((changed_count + 1))
+  if [[ -n "${SCANKIT_CHANGED_FILES:-}" ]]; then
+    # Test/override hook: newline-separated paths (skip git).
+    if [[ -f "$SCANKIT_CHANGED_FILES" ]]; then
+      while IFS= read -r path; do
+        [[ -z "$path" ]] && continue
+        printf '%s\n' "$path" >>"$CHANGED_FILE"
+        changed_count=$((changed_count + 1))
+      done <"$SCANKIT_CHANGED_FILES"
     fi
-  done < <(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...${HEAD_SHA}" 2>/dev/null || git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}")
+  else
+    if [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+      echo "diff mode requires base and head SHAs" >&2
+      exit 1
+    fi
+    # List files added/modified (not deleted) between base and head
+    while IFS= read -r path; do
+      [[ -z "$path" ]] && continue
+      if [[ -e "$path" || -L "$path" ]]; then
+        printf '%s\n' "$path" >>"$CHANGED_FILE"
+        changed_count=$((changed_count + 1))
+      fi
+    done < <(git diff --name-only --diff-filter=ACMR "${BASE_SHA}...${HEAD_SHA}" 2>/dev/null || git diff --name-only --diff-filter=ACMR "${BASE_SHA}" "${HEAD_SHA}")
+  fi
 fi
 
 match_any() {

@@ -44,6 +44,31 @@ else:
 PY
 }
 
+# Batch several key assertions from one ecosystems.json (one python startup).
+assert_flags() {
+  local name_prefix="$1" file="$2"
+  shift 2
+  local result
+  result="$(python3 - "$file" "$@" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1]))
+args = sys.argv[2:]
+# pairs: key expected
+out = []
+for i in range(0, len(args), 2):
+    key, expected = args[i], args[i + 1]
+    val = data.get(key)
+    actual = "true" if val is True else "false" if val is False else str(val)
+    out.append(f"{key}\t{expected}\t{actual}")
+print("\n".join(out))
+PY
+)"
+  while IFS=$'\t' read -r key expected actual; do
+    [[ -z "$key" ]] && continue
+    assert_eq "${name_prefix} ${key}" "$expected" "$actual"
+  done <<<"$result"
+}
+
 echo "== detect-ecosystems =="
 
 run_detect() {
@@ -56,40 +81,35 @@ run_detect() {
 }
 
 OUT=$(run_detect tests/fixtures/python-app)
-assert_eq "python has_python" "true" "$(json_get "$OUT" has_python)"
-assert_eq "python has_go" "false" "$(json_get "$OUT" has_go)"
-assert_eq "python has_generic_code" "true" "$(json_get "$OUT" has_generic_code)"
+assert_flags "python" "$OUT" has_python true has_go false has_generic_code true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/go-app)
-assert_eq "go has_go" "true" "$(json_get "$OUT" has_go)"
-assert_eq "go has_python" "false" "$(json_get "$OUT" has_python)"
+assert_flags "go" "$OUT" has_go true has_python false
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/node-app)
-assert_eq "node has_node" "true" "$(json_get "$OUT" has_node)"
+assert_flags "node" "$OUT" has_node true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/docker-app)
-assert_eq "docker has_docker" "true" "$(json_get "$OUT" has_docker)"
+assert_flags "docker" "$OUT" has_docker true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/openapi-app)
-assert_eq "openapi has_openapi" "true" "$(json_get "$OUT" has_openapi)"
+assert_flags "openapi" "$OUT" has_openapi true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/shell-app)
-assert_eq "shell has_shell" "true" "$(json_get "$OUT" has_shell)"
+assert_flags "shell" "$OUT" has_shell true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/mixed-empty)
-assert_eq "empty has_python" "false" "$(json_get "$OUT" has_python)"
-assert_eq "empty has_generic_code" "true" "$(json_get "$OUT" has_generic_code)"
+assert_flags "empty" "$OUT" has_python false has_generic_code true
 rm -f "$OUT"
 
-OUT=$(run_detect .)
-assert_eq "repo has_actions" "true" "$(json_get "$OUT" has_actions)"
-assert_eq "repo has_shell" "true" "$(json_get "$OUT" has_shell)"
+OUT=$(run_detect tests/fixtures/actions-app)
+assert_flags "actions" "$OUT" has_actions true has_shell true
 rm -f "$OUT"
 
 echo
@@ -100,7 +120,7 @@ DEST_ROOT="$(mktemp -d)"
 echo '{"has_python":true}' >"$ART/ecosystems.json"
 # Two SARIF files with the same finding from different tools (dedup test)
 python3 - "$ART" <<'PY'
-import json, pathlib, sys
+import json, pathlib, sys, os
 art = pathlib.Path(sys.argv[1])
 def sarif(tool, rule="TEST001"):
     return {
@@ -120,8 +140,10 @@ def sarif(tool, rule="TEST001"):
 (art / "notes.txt").write_text("findings")
 (art / "detect-secrets.json").write_text('{"results":[]}')
 (art / "secretlint.json").write_text('[]')
+# Sparse >5 MiB file (avoid writing 6 MiB of zeros each run)
 p = art / "huge.sarif"
-p.write_bytes(b"x" * (6 * 1024 * 1024))
+p.touch()
+os.truncate(p, 6 * 1024 * 1024)
 (art / "main.cvd").write_text("db")
 PY
 
@@ -190,31 +212,86 @@ PY
 )
 assert_eq "dedup merges tools" "dedup_ok" "$DEDUP_STATUS"
 
+echo
+echo "== pr-report =="
+PR_TMP="$(mktemp -d)"
+# Reuse a minimal findings file
+cat >"$PR_TMP/findings.json" <<'JSON'
+{
+  "total_raw": 2,
+  "total_unique": 2,
+  "by_severity": {"HIGH": 1, "MEDIUM": 1},
+  "by_tool": {"Semgrep": 1, "Bandit": 1},
+  "findings": [
+    {"key": "a", "ruleId": "python.lang.security.audit", "severity": "HIGH", "location": "python/app.py:3", "message": "use of assert", "tools": ["Semgrep"], "sources": ["sast-semgrep"]},
+    {"key": "b", "ruleId": "B201", "severity": "MEDIUM", "location": "python/app.py:10", "message": "flask debug true", "tools": ["Bandit"], "sources": ["sast-bandit"]}
+  ]
+}
+JSON
+PR_OUT="$("$ROOT/scripts/pr-report.sh" "$PR_TMP/findings.json" "$PR_TMP/comment.md" both "https://example.test/run/1" 2>&1)"
+assert_file "pr comment exists" "$PR_TMP/comment.md"
+if grep -q 'scankit-pr-report' "$PR_TMP/comment.md" && grep -q 'Unique SARIF findings' "$PR_TMP/comment.md"; then
+  echo "  PASS  pr comment marker + summary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr comment content"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s\n' "$PR_OUT" | grep -q '::error file=python/app.py,line=3'; then
+  echo "  PASS  pr annotation error"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation error missing"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s\n' "$PR_OUT" | grep -q '::warning file=python/app.py,line=10'; then
+  echo "  PASS  pr annotation warning"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation warning missing"
+  FAIL=$((FAIL + 1))
+fi
+# ./prefix and multi-tool title must not break workflow-command properties
+cat >"$PR_TMP/findings2.json" <<'JSON'
+{
+  "total_raw": 1, "total_unique": 1, "by_severity": {"HIGH": 1}, "by_tool": {"A": 1, "B": 1},
+  "findings": [{
+    "key": "c", "ruleId": "R", "severity": "HIGH",
+    "location": "./src/main.py:7", "message": "x",
+    "tools": ["Semgrep", "Bandit"], "sources": []
+  }]
+}
+JSON
+PR_OUT2="$("$ROOT/scripts/pr-report.sh" "$PR_TMP/findings2.json" "$PR_TMP/c2.md" annotations 2>&1)"
+if printf '%s\n' "$PR_OUT2" | grep -q '::error file=src/main.py,line=7'; then
+  echo "  PASS  pr annotation strips ./ prefix"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation ./ prefix"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s\n' "$PR_OUT2" | grep -q 'title=\[Semgrep/Bandit\]'; then
+  echo "  PASS  pr annotation multi-tool title"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation multi-tool title"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$PR_TMP"
+
 rm -rf "$ART" "$DEST_ROOT"
 
 echo
 echo "== resolve-scan-scope / filter-changed-files =="
 
 SCOPE_TMP="$(mktemp -d)"
-pushd "$SCOPE_TMP" >/dev/null
-git init -q
-git config user.email "test@example.com"
-git config user.name "test"
-mkdir -p python .github/workflows docker
-echo 'print(1)' > python/app.py
-echo 'Django==1' > python/requirements.txt
-echo 'FROM scratch' > docker/Dockerfile
-echo 'name: x' > .github/workflows/ci.yml
-echo '# readme' > README.md
-git add -A && git commit -qm base
-BASE=$(git rev-parse HEAD)
+# Classification uses SCANKIT_CHANGED_FILES (no git) for speed; one git smoke at end.
+write_list() { printf '%s\n' "$@" >"$SCOPE_TMP/list.txt"; }
 
-echo 'print(2)' >> python/app.py
-git add -A && git commit -qm py-only
-HEAD_PY=$(git rev-parse HEAD)
-
+write_list "python/app.py"
 rm -f /tmp/gh-scope-out
-env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_PY" "$SCOPE_TMP/out-py" >/dev/null
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-py" >/dev/null
 assert_eq "py-only scan_scope" "diff" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
@@ -222,30 +299,43 @@ assert_eq "py-only scope_dockerfile" "false" "$(grep '^scope_dockerfile=' /tmp/g
 FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/out-py/changed-files.txt" '\.py$')
 assert_eq "filter py" "python/app.py" "$FILTERED"
 
-git checkout -q "$BASE"
-echo 'extra' >> README.md
-git add -A && git commit -qm readme-only
-HEAD_README=$(git rev-parse HEAD)
+write_list "README.md"
 rm -f /tmp/gh-scope-out
-env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_README" "$SCOPE_TMP/out-readme" >/dev/null
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-readme" >/dev/null
 assert_eq "readme scope_sast" "false" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "readme scope_secrets" "true" "$(grep '^scope_secrets=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "readme scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
 
-git checkout -q "$BASE"
-echo 'Flask==1' >> python/requirements.txt
-git add -A && git commit -qm reqs
-HEAD_REQ=$(git rev-parse HEAD)
+write_list "python/requirements.txt"
 rm -f /tmp/gh-scope-out
-env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_REQ" "$SCOPE_TMP/out-reqs" >/dev/null
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-reqs" >/dev/null
 assert_eq "reqs scope_python_manifest" "true" "$(grep '^scope_python_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "reqs scope_sca" "true" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
 
 rm -f /tmp/gh-scope-out
-env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto push "" "" "$SCOPE_TMP/out-full" >/dev/null
+env GITHUB_OUTPUT=/tmp/gh-scope-out \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto push "" "" "$SCOPE_TMP/out-full" >/dev/null
 assert_eq "push auto is full" "full" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "full scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
 
+# Smoke: real git diff path still works
+pushd "$SCOPE_TMP" >/dev/null
+git init -q
+git config user.email "test@example.com"
+git config user.name "test"
+mkdir -p python
+echo 'print(1)' > python/app.py
+git add -A && git commit -qm base
+BASE=$(git rev-parse HEAD)
+echo 'print(2)' >> python/app.py
+git add -A && git commit -qm py
+HEAD_PY=$(git rev-parse HEAD)
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out \
+  "$ROOT/scripts/resolve-scan-scope.sh" diff pull_request "$BASE" "$HEAD_PY" "$SCOPE_TMP/out-git" >/dev/null
+assert_eq "git-diff lists py" "python/app.py" "$(tr '\n' ' ' <"$SCOPE_TMP/out-git/changed-files.txt" | sed 's/ *$//')"
 popd >/dev/null
 rm -rf "$SCOPE_TMP"
 
@@ -262,23 +352,33 @@ fi
 echo
 echo "== actionlint =="
 
-ACTIONLINT_BIN="$(mktemp -d)/actionlint"
+# Cache pinned actionlint under ~/.cache/scankit (or $SCANKIT_CACHE) to avoid a
+# network download on every run. Set SKIP_ACTIONLINT=1 to skip entirely.
+AL_VERSION=1.7.7
+CACHE_ROOT="${SCANKIT_CACHE:-${HOME}/.cache/scankit}"
+mkdir -p "$CACHE_ROOT"
+ACTIONLINT_BIN="${CACHE_ROOT}/actionlint-${AL_VERSION}"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64|amd64) ARCH=amd64 ;;
   arm64|aarch64) ARCH=arm64 ;;
 esac
-# Pinned actionlint release
-AL_VERSION=1.7.7
-AL_TGZ="$(dirname "$ACTIONLINT_BIN")/actionlint.tgz"
-AL_URL="https://github.com/rhysd/actionlint/releases/download/v${AL_VERSION}/actionlint_${AL_VERSION}_${OS}_${ARCH}.tar.gz"
-if curl -fsSL "$AL_URL" -o "$AL_TGZ"; then
+
+if [[ "${SKIP_ACTIONLINT:-}" == "1" ]]; then
+  echo "  PASS  actionlint skipped (SKIP_ACTIONLINT=1)"
+  PASS=$((PASS + 1))
+elif [[ -x "$ACTIONLINT_BIN" ]] || {
+  AL_TGZ="${CACHE_ROOT}/actionlint_${AL_VERSION}_${OS}_${ARCH}.tar.gz"
+  AL_URL="https://github.com/rhysd/actionlint/releases/download/v${AL_VERSION}/actionlint_${AL_VERSION}_${OS}_${ARCH}.tar.gz"
+  curl -fsSL "$AL_URL" -o "$AL_TGZ" &&
   if [[ "$OS" == "linux" && "$ARCH" == "amd64" ]]; then
     bash scripts/verify-sha256.sh "$AL_TGZ" 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
-  fi
-  tar -xzf "$AL_TGZ" -C "$(dirname "$ACTIONLINT_BIN")" actionlint
+  fi &&
+  tar -xzf "$AL_TGZ" -C "$CACHE_ROOT" actionlint &&
+  mv -f "${CACHE_ROOT}/actionlint" "$ACTIONLINT_BIN" &&
   chmod +x "$ACTIONLINT_BIN"
+}; then
   set +e
   "$ACTIONLINT_BIN" -color -shellcheck= -pyflakes= .github/workflows/*.yml
   AL_EXIT=$?
@@ -291,7 +391,7 @@ if curl -fsSL "$AL_URL" -o "$AL_TGZ"; then
     FAIL=$((FAIL + 1))
   fi
 else
-  echo "  FAIL  could not download actionlint"
+  echo "  FAIL  could not download/cache actionlint"
   FAIL=$((FAIL + 1))
 fi
 
@@ -312,6 +412,7 @@ for f in \
   .github/workflows/reusable-malware.yml \
   .github/workflows/reusable-meta.yml \
   .github/workflows/reusable-publish-results.yml \
+  .github/workflows/reusable-pr-report.yml \
   .github/workflows/ci-self-test.yml \
   templates/security-all.yml \
   templates/security-all-scheduled.yml \
@@ -351,6 +452,22 @@ if grep -q 'scan-scope: full' templates/security-all-scheduled.yml; then
   PASS=$((PASS + 1))
 else
   echo "  FAIL  scheduled template missing scan-scope: full"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'pr-report-mode' .github/workflows/reusable-security-full.yml; then
+  echo "  PASS  full suite has pr-report-mode"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite missing pr-report-mode"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'pr-report-mode' .github/workflows/reusable-pr-report.yml; then
+  echo "  PASS  pr-report workflow present"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report workflow missing"
   FAIL=$((FAIL + 1))
 fi
 

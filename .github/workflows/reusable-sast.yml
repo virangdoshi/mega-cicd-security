@@ -143,6 +143,8 @@ jobs:
           patterns: '\.(py|pyi|go|java|kt|kts|rb|js|jsx|mjs|cjs|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp)$'
       - name: Semgrep scan
         if: steps.paths.outputs.skip != 'true'
+        # Container jobs default to sh; mapfile/[[ need bash (available in semgrep image).
+        shell: bash
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
@@ -155,6 +157,7 @@ jobs:
           fi
       - name: Skip (no matching paths)
         if: steps.paths.outputs.skip == 'true'
+        shell: bash
         run: echo "No matching paths in diff; skipping Semgrep" && echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         if: always()
@@ -177,6 +180,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Download changed-files
         if: inputs.scan-scope == 'diff'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -197,7 +203,7 @@ jobs:
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
-          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/bandit.txt"
+          pip install --require-hashes -r "${{ steps.scankit.outputs.root }}/.github/pinned/bandit.txt"
           mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
           if [[ "${{ inputs.scan-scope }}" == "diff" ]]; then
             bandit "${TARGETS[@]}" -f json -o bandit.json || EXIT=$?

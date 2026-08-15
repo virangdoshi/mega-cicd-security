@@ -1,0 +1,26 @@
+name: Resolve scankit repository root
+description: >
+  Output the filesystem path to this scankit checkout (via github.action_path).
+  Use for .github/pinned/* and scripts/* so cross-repo callers do not look in GITHUB_WORKSPACE.
+outputs:
+  root:
+    description: Absolute path to the scankit repository root for this action ref
+    value: ${{ steps.resolve.outputs.root }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve root
+      id: resolve
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        # action_path = <scankit>/.github/actions/scankit-root
+        ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        if [[ ! -d "$ROOT/.github/pinned" ]]; then
+          echo "::error::scankit-root: expected $ROOT/.github/pinned (action ref may be incomplete)"
+          exit 1
+        fi
+        echo "root=$ROOT" >>"$GITHUB_OUTPUT"
+        echo "scankit root: $ROOT"

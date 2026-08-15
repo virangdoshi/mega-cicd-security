@@ -81,12 +81,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Install Trivy
         run: |
           set -euo pipefail
           VERSION=0.74.0
           curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o trivy.tgz
-          bash scripts/verify-sha256.sh trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
           tar -xzf trivy.tgz
           sudo install -m 0755 trivy /usr/local/bin/trivy
 
@@ -203,10 +206,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: ScanCode
         run: |
           set -euo pipefail
-          pip install --require-hashes --only-binary=:all: -r "${GITHUB_WORKSPACE}/.github/pinned/scancode-toolkit.txt"
+          pip install --require-hashes --only-binary=:all: -r "${{ steps.scankit.outputs.root }}/.github/pinned/scancode-toolkit.txt"
           scancode -clipeu --json-pp scancode.json . || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

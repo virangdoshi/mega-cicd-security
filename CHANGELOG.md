@@ -10,15 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Diff-scoped scanning** (`scan-scope: auto|diff|full`, default `auto`): PRs scan changed files; push/`workflow_dispatch` scan the full tree. Path-filterable tools use the diff; tools that cannot path-scope are skipped unless the diff triggers them (lockfile, Dockerfile, workflows, etc.).
-- Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`
+- Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scankit-root`, `pr-report`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`, `scripts/pr-report.sh`
+- **PR report** (`pr-report-mode: none|comment|annotations|both`, default `both`): on `pull_request`, sticky summary comment + workflow file/line annotations from deduped SARIF findings (independent of `results-publish-mode`)
 - Anchore SBOM + Grype pipeline: `anchore/sbom-action` (Syft SPDX/CycloneDX) and `anchore/scan-action` Grype SBOM scan with SARIF → Code Scanning (`sbom-anchore-syft` / `sbom-anchore-grype`)
 
 ### Fixed
 
+- Cross-repo callers: resolve `.github/pinned/*` and `scripts/verify-sha256.sh` via new `scankit-root` composite action (`github.action_path`) instead of `GITHUB_WORKSPACE` (which is the caller checkout)
+- TruffleHog: replace broken `--only-verified=false` with `--results=verified,unknown`; honor `fail-on-severity: NONE` for Gitleaks/TruffleHog via `continue-on-error`
+- Regenerate `flare-capa` / `presidio-analyzer` hash pins with `pip-compile --allow-unsafe` (pip/setuptools); bump ratchet job to Go 1.24
+- Semgrep container jobs: set `shell: bash` so `mapfile` / `[[` work (container default is `sh`)
+- PR report annotations: strip `./` prefix correctly (`lstrip` bug); escape `,`/`:` in titles; accurate cap/omit counts
 - Restore `reusable-security-full` workflow-level permission ceiling (`contents`/`pull-requests`/`security-events: write`) so nested job scopes are valid for cross-repo callers (avoids silent `startup_failure`)
 
 ### Security
 
+- Override transitive `lodash` to `4.18.1` in `.github/pinned/npm-api` (GHSA-f23m-r3pf-42rh / GHSA-r5fr-rjxr-66jc)
 - Replace remaining `curl|sh` / unpinned npm/cargo/rustup installs with SHA256-verified release binaries, `npm ci` lockfile (`.github/pinned/npm-api`), and hashed ScanCode requirements (Scorecard Pinned-Dependencies)
 - Bump Trivy installs to v0.74.0 and KICS to v2.1.20 (release assets + checksums)
 - Digest-pin test fixture `alpine:3.19`; pin `tests/run.sh` actionlint download

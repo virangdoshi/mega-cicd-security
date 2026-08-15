@@ -107,6 +107,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Resolve image
         id: build
@@ -135,7 +138,7 @@ jobs:
           set -euo pipefail
           VERSION=v0.4.15
           curl -sL "https://github.com/goodwithtech/dockle/releases/download/${VERSION}/dockle_${VERSION#v}_Linux-64bit.tar.gz" -o dockle.tgz
-          bash scripts/verify-sha256.sh dockle.tgz 8bfc9183d1d3d67800edb45bea4bb63ddf1d28bec5f89944075a07007d79caad
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" dockle.tgz 8bfc9183d1d3d67800edb45bea4bb63ddf1d28bec5f89944075a07007d79caad
           tar -xzf dockle.tgz
           ./dockle --exit-code "$FAIL_EXIT_CODE" --format json --output dockle.json "${{ steps.build.outputs.image }}" || EXIT=$?
           EXIT=${EXIT:-0}
@@ -161,6 +164,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Resolve image
         id: build
@@ -186,7 +192,7 @@ jobs:
           set -euo pipefail
           VERSION=0.74.0
           curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o trivy.tgz
-          bash scripts/verify-sha256.sh trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
           tar -xzf trivy.tgz
           sudo install -m 0755 trivy /usr/local/bin/trivy
 
@@ -270,6 +276,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Resolve image
         id: build
@@ -294,7 +303,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sL "https://github.com/wagoodman/dive/releases/download/v0.12.0/dive_0.12.0_linux_amd64.tar.gz" -o dive.tgz
-          bash scripts/verify-sha256.sh dive.tgz 20a7966523a0905f950c4fbf26471734420d6788cfffcd4a8c4bc972fded3e96
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" dive.tgz 20a7966523a0905f950c4fbf26471734420d6788cfffcd4a8c4bc972fded3e96
           tar -xzf dive.tgz
           CI=true ./dive "${{ steps.build.outputs.image }}" | tee dive.txt || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

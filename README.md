@@ -160,6 +160,7 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | `scan-scope` | `auto` | `auto` = diff on `pull_request`, full on push/`workflow_dispatch`; or force `diff` / `full` |
 | `fail-on-severity` | `HIGH` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` |
 | `results-publish-mode` | `none` | `none` \| `branch` \| `pull-request` |
+| `pr-report-mode` | `both` | On `pull_request`: `none` \| `comment` \| `annotations` \| `both` (sticky PR summary + file/line annotations) |
 | `image` / `dockerfile` | — | Container scans; builds Dockerfile when image empty |
 | `enable-scancode` | `false` | Heavy license scan (opt-in) |
 | `enable-<tool>` | `true` | Per-tool toggles on each category workflow |
@@ -239,11 +240,13 @@ Private library repos need org Actions access so app repos can `uses:` the workf
 |---------|------|
 | **GitHub Code Scanning** | SARIF-capable tools (always attempted) |
 | **Actions artifacts** | Always |
+| **PR comment + annotations** | On `pull_request` when `pr-report-mode` is `comment`, `annotations`, or `both` (default) |
 | **Git `security-results/`** | When `results-publish-mode` is `branch` or `pull-request` |
 
 ```yaml
 with:
-  results-publish-mode: pull-request   # or branch | none
+  pr-report-mode: both                 # sticky PR comment + workflow annotations (PR events only)
+  results-publish-mode: pull-request   # or branch | none — git snapshot, separate from PR comment
   results-branch: security-results
 ```
 

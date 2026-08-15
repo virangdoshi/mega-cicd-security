@@ -52,6 +52,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - name: Download changed-files
         if: inputs.scan-scope == 'diff'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -71,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sL "https://github.com/Bearer/bearer/releases/download/v1.46.0/bearer_1.46.0_linux_amd64.tar.gz" -o bearer.tgz
-          bash scripts/verify-sha256.sh bearer.tgz ab3823519649834db74768af54b7ac08aa38d32286cb761c72693686427b1a1b
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" bearer.tgz ab3823519649834db74768af54b7ac08aa38d32286cb761c72693686427b1a1b
           tar -xzf bearer.tgz
           sudo install -m 0755 bearer /usr/local/bin/bearer
           mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
@@ -101,13 +104,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@7f7c9aec76ecf3d17a3f78831caba9043b53d53a
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Presidio Analyzer
         run: |
           set -euo pipefail
-          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/presidio-analyzer.txt"
+          pip install --require-hashes -r "${{ steps.scankit.outputs.root }}/.github/pinned/presidio-analyzer.txt"
           python3 - <<'PY'
           import json, os, pathlib, glob
           from presidio_analyzer import AnalyzerEngine
@@ -160,6 +166,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Semgrep privacy/security rules
+        # Container jobs default to sh; [[ / pipefail need bash.
+        shell: bash
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |

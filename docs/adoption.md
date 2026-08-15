@@ -16,6 +16,7 @@ jobs:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # pr-report-mode: both  # sticky PR comment + annotations (default)
       # scan-scope: auto  # default — diff on PRs, full on push/dispatch
       # enable-image-build / enable-code-build only on trusted refs
 ```
