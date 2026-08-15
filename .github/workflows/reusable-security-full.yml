@@ -64,11 +64,13 @@ on:
         default: false
 
 permissions:
-  # Least privilege defaults; write scopes granted per-job below.
-  contents: read
+  # Workflow-level ceiling for nested jobs (GitHub does not allow job scopes
+  # above this). Must cover SARIF upload + optional publish; callers must match.
+  contents: write
+  security-events: write
   actions: read
   id-token: write
-  pull-requests: read
+  pull-requests: write
   packages: read
 
 jobs:

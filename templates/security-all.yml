@@ -1,8 +1,9 @@
 # Copy into your app repo as .github/workflows/security-all.yml
 # Replace OWNER/scankit and prefer a commit SHA instead of @main.
 # Enable Code Scanning in the repo settings so SARIF uploads appear in the Security tab.
-# Caller permissions must meet reusable-security-full's ceiling (contents:write + pull-requests:write)
-# or the run fails at startup with no useful error.
+# Caller permissions must meet reusable-security-full's ceiling
+# (contents:write + pull-requests:write + security-events:write) or the run
+# fails at startup with no useful error — even when publish mode is none.
 name: Security — all
 
 on:
@@ -11,10 +12,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# Least privilege for scan-only (no results publish).
-# Add contents:write + pull-requests:write only if you enable publish mode.
 permissions:
   contents: write
+  pull-requests: write
   security-events: write
   actions: read
   id-token: write
