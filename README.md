@@ -8,7 +8,7 @@
 
 Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files. On pull requests, `scan-scope: auto` further limits scans to the changed-file diff.
 
-[Scanner inventory](docs/scanners.md) · [Org adoption](docs/adoption.md) · [Results publishing](docs/results.md) · [Templates](templates/)
+[Scanner inventory](docs/scanners.md) · [Org adoption](docs/adoption.md) · [Upgrade 1.0 → 1.1](docs/upgrade-1.1.md) · [Results publishing](docs/results.md) · [Templates](templates/)
 
 ---
 
@@ -33,7 +33,7 @@ Most teams bolt on one scanner at a time and end up with uneven coverage. This r
 
 ### 1. Publish this repo
 
-Push to `YOUR_ORG/scankit` (public, or private with Actions access for callers). Tag releases (`v1.0.0`) when you can.
+Push to `YOUR_ORG/scankit` (public, or private with Actions access for callers). Tag releases (`v1.1.0`) when you can.
 
 ### 2. Wire an application repo
 
