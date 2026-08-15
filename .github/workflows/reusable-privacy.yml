@@ -33,24 +33,28 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   privacy-bearer:
     name: privacy-bearer
     if: inputs.enable-bearer && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Bearer
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sfL https://raw.githubusercontent.com/Bearer/bearer/main/contrib/install.sh | sh
+          curl -sfL https://raw.githubusercontent.com/Bearer/bearer/v1.46.0/contrib/install.sh | sh
           bearer scan . --format sarif --output bearer.sarif || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -80,7 +84,7 @@ jobs:
       - name: Presidio Analyzer
         run: |
           set -euo pipefail
-          pip install presidio-analyzer
+          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/presidio-analyzer.txt"
           python3 - <<'PY'
           import json, os, pathlib, glob
           from presidio_analyzer import AnalyzerEngine
@@ -123,19 +127,24 @@ jobs:
     name: privacy-semgrep
     if: inputs.enable-semgrep-privacy && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     container:
-      image: semgrep/semgrep:latest
+      image: semgrep/semgrep:1.110.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Semgrep privacy/security rules
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           # Overlap with SAST intentional; try secrets/security packs
           semgrep scan --config p/secrets --config p/security-audit --sarif --output semgrep-privacy.sarif . || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6

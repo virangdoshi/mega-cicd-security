@@ -12,10 +12,12 @@ Optionally persist a summary **into git** via `results-publish-mode` on `reusabl
 | Mode | Behavior |
 |------|----------|
 | `none` | Default for PR/push templates — no git writes |
-| `branch` | Commit under `security-results/<YYYY-MM-DD>/` and `security-results/latest/` on branch `security-results` (configurable) |
+| `branch` | Commit under `security-results/<YYYY-MM-DD>/` and `security-results/latest/` on branch `security-results` (or `security-results/*` only) |
 | `pull-request` | Same files on `chore/security-results`; open/update a PR into the default branch |
 
 Publishing runs with `if: always()` so failed scanners still produce a summary. Aggregation also writes **`findings-deduped.json`**: unique findings keyed by rule + location + message, with a severity rollup and which tools reported each issue (SARIF only).
+
+**Guards:** secret-scanner raw JSON/SARIF is never committed; `results-branch` cannot be `main`/`master`/default; `results-path` must stay under `security-results/`.
 
 ## Scheduled daily scans
 
@@ -36,7 +38,7 @@ permissions:
 
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@SHA
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@SHA
     with:
       results-publish-mode: pull-request
 ```

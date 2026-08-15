@@ -1,5 +1,5 @@
 # Copy into your app repo as .github/workflows/security-all.yml
-# Replace OWNER/mega-cicd-security and prefer a commit SHA instead of @main.
+# Replace OWNER/scankit and prefer a commit SHA instead of @main.
 # Enable Code Scanning in the repo settings so SARIF uploads appear in the Security tab.
 name: Security — all
 
@@ -9,12 +9,13 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Least privilege for scan-only (no results publish).
+# Add contents:write + pull-requests:write only if you enable publish mode.
 permissions:
   contents: read
   security-events: write
   actions: read
   id-token: write
-  pull-requests: write
   packages: read
 
 concurrency:
@@ -23,11 +24,14 @@ concurrency:
 
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # Docker/compile of PR code is off by default:
+      # enable-image-build: true
+      # enable-code-build: true
       # enable-scancode: false
       # image: ""
       # dockerfile: Dockerfile

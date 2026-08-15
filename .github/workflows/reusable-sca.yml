@@ -72,7 +72,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
   pull-requests: read
 
 jobs:
@@ -80,6 +79,10 @@ jobs:
     name: sca-osv
     if: inputs.enable-osv && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -112,16 +115,22 @@ jobs:
     name: sca-trivy-fs
     if: inputs.enable-trivy-fs && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Trivy
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
       - name: Trivy filesystem
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
-          SEV="${{ inputs.fail-on-severity }}"
+          SEV="$FAIL_ON_SEVERITY"
           ARGS=(fs --format sarif --output trivy-fs.sarif --severity .)
           if [[ "$SEV" != "NONE" ]]; then
             ARGS+=(--exit-code 1 --severity-exit-code "$SEV")
@@ -144,6 +153,10 @@ jobs:
     name: sca-grype
     if: inputs.enable-grype && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -221,9 +234,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: pip-audit
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          pip install pip-audit
+          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/pip-audit.txt"
           if [[ -f requirements.txt ]]; then
             pip-audit -r requirements.txt -f json -o pip-audit.json || EXIT=$?
           elif [[ -f pyproject.toml ]]; then
@@ -234,7 +249,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -256,9 +271,11 @@ jobs:
         with:
           go-version: "1.23.x"
       - name: govulncheck
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@d1f380186385b4f64e00313f31743df8e4b89a77  # v1.1.4
           if [[ -f go.mod ]]; then
             govulncheck -json ./... > govulncheck.json || EXIT=$?
           else
@@ -267,7 +284,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -289,11 +306,13 @@ jobs:
         with:
           node-version: "20"
       - name: Retire.js
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          npx --yes retire --outputformat json --outputpath retire.json || EXIT=$?
+          npx --yes retire@5.2.5 --outputformat json --outputpath retire.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -312,9 +331,11 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Rust + cargo-audit
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
           # shellcheck disable=SC1091
           source "$HOME/.cargo/env"
           cargo install cargo-audit --locked
@@ -325,7 +346,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -344,9 +365,11 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: cargo-deny
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
           # shellcheck disable=SC1091
           source "$HOME/.cargo/env"
           cargo install cargo-deny --locked
@@ -357,7 +380,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -376,6 +399,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: bundler-audit
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           sudo gem install bundler-audit
@@ -386,7 +411,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -405,9 +430,12 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: local-php-security-checker
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sL "$(curl -s https://api.github.com/repos/fabpot/local-php-security-checker/releases/latest | grep -o 'https://.*/local-php-security-checker_[0-9.]*_linux_amd64' | head -1)" -o php-security-checker
+          curl -sL "https://github.com/fabpot/local-php-security-checker/releases/download/v2.0.0/local-php-security-checker_2.0.0_linux_amd64" -o php-security-checker
+          bash scripts/verify-sha256.sh php-security-checker 96f5db138921c60e18a551221c7f93e787cccc7ed5953b80920b34d97af0ce10
           chmod +x php-security-checker
           if [[ -f composer.lock ]]; then
             ./php-security-checker --format=json > php-security.json || EXIT=$?
@@ -417,7 +445,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

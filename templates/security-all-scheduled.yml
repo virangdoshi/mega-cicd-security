@@ -1,6 +1,6 @@
 # Daily / on-demand full suite with results published as a PR.
 # Requires contents:write and pull-requests:write (granted below).
-# Replace OWNER/mega-cicd-security and prefer a commit SHA instead of @main.
+# Replace OWNER/scankit and prefer a commit SHA instead of @main.
 name: Security — scheduled
 
 on:
@@ -18,9 +18,12 @@ permissions:
 
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: pull-request
       results-branch: security-results
+      # Trusted schedule context — builds OK if you need image/compile scans:
+      # enable-image-build: true
+      # enable-code-build: true

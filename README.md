@@ -1,8 +1,8 @@
-# Mega CI/CD Security
+# Scankit
 
-[![CI Self-Test](https://github.com/virangdoshi/mega-cicd-security/actions/workflows/ci-self-test.yml/badge.svg)](https://github.com/virangdoshi/mega-cicd-security/actions/workflows/ci-self-test.yml)
+[![CI Self-Test](https://github.com/virangdoshi/scankit/actions/workflows/ci-self-test.yml/badge.svg)](https://github.com/virangdoshi/scankit/actions/workflows/ci-self-test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/virangdoshi/mega-cicd-security?include_prereleases)](https://github.com/virangdoshi/mega-cicd-security/releases)
+[![Release](https://img.shields.io/github/v/release/virangdoshi/scankit?include_prereleases)](https://github.com/virangdoshi/scankit/releases)
 
 **Open-source security scanning for GitHub Actions — kitchen-sink coverage, ecosystem-aware, org-ready.**
 
@@ -32,7 +32,7 @@ Most teams bolt on one scanner at a time and end up with uneven coverage. This r
 
 ### 1. Publish this repo
 
-Push to `YOUR_ORG/mega-cicd-security` (public, or private with Actions access for callers). Tag releases (`v1.0.0`) when you can.
+Push to `YOUR_ORG/scankit` (public, or private with Actions access for callers). Tag releases (`v1.0.0`) when you can.
 
 ### 2. Wire an application repo
 
@@ -52,7 +52,6 @@ permissions:
   security-events: write
   actions: read
   id-token: write
-  pull-requests: write
   packages: read
 
 concurrency:
@@ -61,14 +60,15 @@ concurrency:
 
 jobs:
   security:
-    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
+    uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # enable-image-build / enable-code-build stay false on untrusted PRs
 ```
 
-Prefer a **commit SHA** (or immutable release tag) instead of `@main` in production. Third-party Actions inside this library are already SHA-pinned.
+Prefer a **commit SHA** (or immutable release tag) instead of `@main` in production. Third-party Actions inside this library are already SHA-pinned. For results publish, grant `contents: write` + `pull-requests: write` and set `results-publish-mode`.
 
 **Or copy a template:**
 
@@ -131,12 +131,12 @@ Full tool list: [docs/scanners.md](docs/scanners.md).
 ```yaml
 jobs:
   secrets:
-    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-secrets.yml@SHA
+    uses: YOUR_ORG/scankit/.github/workflows/reusable-secrets.yml@SHA
     with:
       selection-mode: detected
       fail-on-severity: HIGH
   sca:
-    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-sca.yml@SHA
+    uses: YOUR_ORG/scankit/.github/workflows/reusable-sca.yml@SHA
     with:
       selection-mode: detected
       fail-on-severity: HIGH
@@ -274,7 +274,10 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 ## Security notes
 
 - Prefer **SHA-pinned** `uses:` for this library and for third-party Actions (already pinned inside this repo).
-- CI enforces pin hashes via [`scripts/check-action-pins.sh`](scripts/check-action-pins.sh) (run from `./tests/run.sh`).
+- Workflow inputs are passed into shells via `env:` (not `${{ }}` interpolation inside `run:`) to avoid expression injection.
+- Docker image builds and CodeQL/SpotBugs compiles are **off by default** (`enable-image-build` / `enable-code-build`) so PR pipelines do not execute untrusted build scripts.
+- Results publish excludes secret-scanner artifacts and only allows `security-results` branch names.
+- CI enforces Action pin hashes via [`scripts/check-action-pins.sh`](scripts/check-action-pins.sh) (run from `./tests/run.sh`).
 - Dependabot updates those SHAs in a **single weekly grouped PR**.
 - Grant callers least privilege; only add write permissions when publishing results.
 - This suite finds issues — it does not replace threat modeling, review, or production monitoring.

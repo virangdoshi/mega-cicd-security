@@ -36,7 +36,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   api-spectral:
@@ -51,13 +50,15 @@ jobs:
         with:
           node-version: "20"
       - name: Spectral
+        env:
+          API_SPEC_PATHS: ${{ inputs.api-spec-paths }}
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          npm install -g @stoplight/spectral-cli
+          npm install -g @stoplight/spectral-cli@6.14.2
           mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' -o -iname 'asyncapi*.yml' -o -iname 'asyncapi*.yaml' -o -iname 'asyncapi*.json' \) ! -path './.git/*' ! -path './node_modules/*')
-          if [[ -n "${{ inputs.api-spec-paths }}" ]]; then
-            # shellcheck disable=SC2206
-            SPECS=(${{ inputs.api-spec-paths }})
+          if [[ -n "$API_SPEC_PATHS" ]]; then
+            read -r -a SPECS <<< "$API_SPEC_PATHS"
           fi
           if [[ ${#SPECS[@]} -eq 0 ]]; then
             echo "No API specs found"; echo '[]' > spectral.json; exit 0
@@ -69,7 +70,7 @@ jobs:
           EOF
           spectral lint "${SPECS[@]}" -f json -o spectral.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -88,9 +89,11 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: vacuum
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sL "$(curl -s https://api.github.com/repos/daveshanley/vacuum/releases/latest | grep -o 'https://.*/vacuum_linux_x86_64.tar.gz' | head -1)" -o vacuum.tgz
+          curl -sL "https://github.com/daveshanley/vacuum/releases/download/v0.14.3/vacuum_0.14.3_linux_x86_64.tar.gz" -o vacuum.tgz
           tar -xzf vacuum.tgz
           mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' \) ! -path './.git/*')
           if [[ ${#SPECS[@]} -eq 0 ]]; then
@@ -98,7 +101,7 @@ jobs:
           fi
           ./vacuum lint "${SPECS[0]}" -j > vacuum-report.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -120,16 +123,18 @@ jobs:
         with:
           node-version: "20"
       - name: graphql-schema-linter
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          npm install -g graphql graphql-schema-linter
+          npm install -g graphql@16.10.0 graphql-schema-linter@3.0.1
           mapfile -t SCHEMAS < <(find . -type f \( -name '*.graphql' -o -name '*.gql' \) ! -path './.git/*')
           if [[ ${#SCHEMAS[@]} -eq 0 ]]; then
             echo "No GraphQL schemas"; echo ok > graphql-linter.txt; exit 0
           fi
           graphql-schema-linter "${SCHEMAS[@]}" 2>&1 | tee graphql-linter.txt || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -151,16 +156,18 @@ jobs:
         with:
           node-version: "20"
       - name: IBM OpenAPI Validator
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          npm install -g ibm-openapi-validator
+          npm install -g ibm-openapi-validator@1.25.2
           mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' \) ! -path './.git/*')
           if [[ ${#SPECS[@]} -eq 0 ]]; then
             echo "No specs"; echo '{}' > ibm-openapi.json; exit 0
           fi
           lint-openapi "${SPECS[0]}" -j > ibm-openapi.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

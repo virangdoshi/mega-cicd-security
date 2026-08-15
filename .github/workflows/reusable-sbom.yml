@@ -71,7 +71,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
       - name: Trivy SBOM
         run: |
           trivy fs --format spdx-json --output trivy.spdx.json .
@@ -96,7 +96,7 @@ jobs:
           node-version: "20"
       - name: cdxgen
         run: |
-          npx --yes @cyclonedx/cdxgen -r -o cdxgen.cdx.json || true
+          npx --yes @cyclonedx/cdxgen@11.2.3 -r -o cdxgen.cdx.json || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cdxgen
@@ -114,13 +114,15 @@ jobs:
           name: sbom-syft
           path: sbom
       - name: Install Grype
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/v0.91.2/install.sh | sh -s -- -b /usr/local/bin
       - name: Grype SBOM
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           grype "sbom:sbom/syft.cdx.json" -o json > grype-sbom.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -141,7 +143,8 @@ jobs:
       - name: ScanCode
         run: |
           set -euo pipefail
-          pip install scancode-toolkit
+          # No hashed requirements file yet; version pin is still better than unpinned
+          pip install 'scancode-toolkit==32.3.0'
           scancode -clipeu --json-pp scancode.json . || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

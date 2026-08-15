@@ -7,6 +7,20 @@ ARTIFACTS_DIR="${1:-artifacts}"
 OUT_ROOT="${2:-security-results}"
 DATE_STAMP="${3:-$(date -u +%Y-%m-%d)}"
 
+# Refuse path traversal via '..' components (absolute paths OK for local/CI temp dirs)
+contains_dotdot() {
+  local p="$1"
+  [[ "$p" == *'/../'* || "$p" == '../'* || "$p" == *'/..' || "$p" == '..' ]]
+}
+if contains_dotdot "$OUT_ROOT" || [[ -z "$OUT_ROOT" ]]; then
+  echo "Refusing unsafe out-root: $OUT_ROOT" >&2
+  exit 1
+fi
+if contains_dotdot "$ARTIFACTS_DIR"; then
+  echo "Refusing unsafe artifacts-dir: $ARTIFACTS_DIR" >&2
+  exit 1
+fi
+
 DEST="${OUT_ROOT}/${DATE_STAMP}"
 LATEST="${OUT_ROOT}/latest"
 mkdir -p "$DEST" "$LATEST"
@@ -40,11 +54,17 @@ summary="${DEST}/summary.md"
   echo "|------|------|"
 } >"$summary"
 
-# Copy report-like files; skip clamav DB dumps
+# Copy report-like files; skip clamav DB dumps and secret-scanner raw output
+# (never commit potential live secrets into git via publish).
 while IFS= read -r -d '' f; do
   base="$(basename "$f")"
-  case "$base" in
+  lower="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
     *.cvd|*.cld|*clamav*db*|main.cvd|daily.cvd) continue ;;
+    *gitleaks*|*trufflehog*|*detect-secrets*|*secretlint*|*secrets*.json|*secret*.sarif)
+      echo "| \`${base}\` | (skipped, secret-scanner artifact) |" >>"$summary"
+      continue
+      ;;
   esac
   size="$(wc -c <"$f" | tr -d ' ')"
   if (( size > MAX_BYTES )); then
@@ -184,6 +204,7 @@ PY
   echo
   echo "- SARIF may also be available in GitHub Code Scanning."
   echo "- Large antivirus databases are not committed."
+  echo "- Secret-scanner raw JSON/SARIF is excluded from publish."
   echo "- Dedup is best-effort across SARIF only (JSON-only scanners are listed as artifacts)."
 } >>"$summary"
 

@@ -18,11 +18,16 @@ runs:
   steps:
     - name: Aggregate
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DATE_STAMP: ${{ inputs.date-stamp }}
+        ARTIFACTS_DIR: ${{ inputs.artifacts-dir }}
+        OUT_ROOT: ${{ inputs.out-root }}
       run: |
         set -euo pipefail
-        REPO_ROOT="$(cd "${{ github.action_path }}/../../.." && pwd)"
-        DATE="${{ inputs.date-stamp }}"
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        DATE="$DATE_STAMP"
         if [[ -z "$DATE" ]]; then
           DATE="$(date -u +%Y-%m-%d)"
         fi
-        bash "${REPO_ROOT}/scripts/aggregate-results.sh" "${{ inputs.artifacts-dir }}" "${{ inputs.out-root }}" "$DATE"
+        bash "${REPO_ROOT}/scripts/aggregate-results.sh" "$ARTIFACTS_DIR" "$OUT_ROOT" "$DATE"
