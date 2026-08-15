@@ -16,6 +16,7 @@ on:
         type: string
         default: "true"
       enable-syft:
+        description: Anchore Syft SBOM via anchore/sbom-action (SPDX + CycloneDX)
         type: boolean
         default: true
       enable-trivy-sbom:
@@ -25,6 +26,7 @@ on:
         type: boolean
         default: true
       enable-grype-sbom:
+        description: Anchore Grype vuln scan of the Syft SBOM via anchore/scan-action
         type: boolean
         default: true
       enable-scancode:
@@ -35,29 +37,32 @@ permissions:
   contents: read
 
 jobs:
-  sbom-syft:
-    name: sbom-syft
+  # Anchore Syft — generate SPDX + CycloneDX SBOMs for the repository
+  sbom-anchore-syft:
+    name: sbom-anchore-syft
     if: inputs.enable-syft && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
-      - name: Syft SBOM
+      - name: Anchore Syft SBOM (SPDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
           output-file: syft.spdx.json
-      - name: Syft CycloneDX
+          upload-artifact: false
+      - name: Anchore Syft SBOM (CycloneDX)
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: cyclonedx-json
           output-file: syft.cdx.json
+          upload-artifact: false
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: sbom-syft
+          name: sbom-anchore-syft
           path: |
             syft.spdx.json
             syft.cdx.json
@@ -103,33 +108,78 @@ jobs:
           path: cdxgen.cdx.json
           if-no-files-found: warn
 
-  sbom-grype-consume:
-    name: sbom-grype-consume
+  # Anchore Grype — vulnerability scan of the Syft CycloneDX SBOM (+ SARIF to Code Scanning)
+  sbom-anchore-grype:
+    name: sbom-anchore-grype
     if: inputs.enable-grype-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
-    needs: [sbom-syft]
+    needs: [sbom-anchore-syft]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: sbom-syft
+          name: sbom-anchore-syft
           path: sbom
-      - name: Install Grype
-        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/v0.91.2/install.sh | sh -s -- -b /usr/local/bin
-      - name: Grype SBOM
+      - name: Anchore Grype (SBOM)
+        id: grype
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          sbom: sbom/syft.cdx.json
+          fail-build: ${{ inputs.fail-on-severity != 'NONE' }}
+          severity-cutoff: ${{ inputs.fail-on-severity == 'NONE' && 'negligible' || inputs.fail-on-severity }}
+          output-format: sarif
+          add-cpes-if-none: true
+      - name: Anchore Grype JSON report
+        if: always()
+        id: grype-json
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          sbom: sbom/syft.cdx.json
+          fail-build: false
+          output-format: json
+          add-cpes-if-none: true
+      - name: Patch SARIF artifactLocation (Grype SBOM scans)
+        if: always() && steps.grype.outputs.sarif != ''
         env:
-          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
+          SARIF_PATH: ${{ steps.grype.outputs.sarif }}
         run: |
           set -euo pipefail
-          grype "sbom:sbom/syft.cdx.json" -o json > grype-sbom.json || EXIT=$?
-          EXIT=${EXIT:-0}
-          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
-            exit "$EXIT"
-          fi
+          # Grype SBOM SARIF may omit physicalLocation.uri; Code Scanning rejects that.
+          python3 - <<'PY'
+          import json, os, pathlib
+          path = pathlib.Path(os.environ["SARIF_PATH"])
+          data = json.loads(path.read_text())
+          stub = "sbom/syft.cdx.json"
+          for run in data.get("runs") or []:
+              for result in run.get("results") or []:
+                  locs = result.get("locations") or []
+                  if not locs:
+                      result["locations"] = [{
+                          "physicalLocation": {"artifactLocation": {"uri": stub}}
+                      }]
+                      continue
+                  for loc in locs:
+                      pl = loc.setdefault("physicalLocation", {})
+                      art = pl.setdefault("artifactLocation", {})
+                      if not art.get("uri"):
+                          art["uri"] = stub
+          path.write_text(json.dumps(data))
+          PY
+      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        if: always() && steps.grype.outputs.sarif != ''
+        with:
+          sarif_file: ${{ steps.grype.outputs.sarif }}
+          category: sbom-anchore-grype
+        continue-on-error: true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: sbom-grype-json
-          path: grype-sbom.json
+          name: sbom-anchore-grype
+          path: |
+            ${{ steps.grype.outputs.sarif }}
+            ${{ steps.grype-json.outputs.json }}
           if-no-files-found: warn
 
   sbom-scancode:
