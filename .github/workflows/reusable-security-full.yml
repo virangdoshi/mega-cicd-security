@@ -100,7 +100,8 @@ jobs:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Detect
         id: detect
-        uses: ./.github/actions/detect-ecosystems
+        # Full owner/repo/path@sha — relative ./ resolves to the *caller* repo and breaks cross-repo use
+        uses: virangdoshi/scankit/.github/actions/detect-ecosystems@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
 
   secrets:
     needs: detect

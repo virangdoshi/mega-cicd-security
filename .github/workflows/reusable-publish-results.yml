@@ -74,7 +74,8 @@ jobs:
           pattern: "*"
         continue-on-error: true
       - name: Aggregate
-        uses: ./.github/actions/aggregate-results
+        # Full owner/repo/path@sha — relative ./ resolves to the *caller* repo and breaks cross-repo use
+        uses: virangdoshi/scankit/.github/actions/aggregate-results@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
         with:
           artifacts-dir: artifacts
           out-root: ${{ inputs.results-path }}

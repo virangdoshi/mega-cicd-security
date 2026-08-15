@@ -48,10 +48,9 @@ Forks of private libraries do **not** inherit reusable-workflow access — point
 
 | Mode | Caller `permissions` |
 |------|----------------------|
-| Scan only | `contents: read`, `security-events: write`, `actions: read`, `id-token: write` (Scorecard) |
-| Publish PR/branch | also `contents: write`, `pull-requests: write` |
+| Scan only / publish | `contents: write`, `pull-requests: write`, `security-events: write`, `actions: read`, `id-token: write` (Scorecard), `packages: read` |
 
-Nested reusable workflows declare their own `permissions:` blocks; the caller must grant at least those scopes.
+`reusable-security-full` declares `contents: write` + `pull-requests: write` at the workflow level (for the optional publish job). The caller must grant at least that ceiling or GitHub fails the run at **startup** with no job logs. Nested reusable workflows declare their own `permissions:` blocks within that ceiling.
 
 ## Selection modes
 
