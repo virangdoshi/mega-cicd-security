@@ -1,0 +1,52 @@
+name: Post scankit PR report
+description: Emit workflow annotations and write a sticky PR comment body from findings-deduped.json
+inputs:
+  findings-json:
+    description: Path to findings-deduped.json
+    required: true
+  summary-md:
+    description: Optional path to summary.md (appended to job summary)
+    required: false
+    default: ""
+  mode:
+    description: comment | annotations | both
+    required: false
+    default: both
+  run-url:
+    description: Workflow run URL for the comment
+    required: false
+    default: ""
+  comment-path:
+    description: Where to write the markdown comment body
+    required: false
+    default: scankit-pr-comment.md
+outputs:
+  comment-path:
+    description: Path to the generated comment markdown
+    value: ${{ steps.report.outputs.comment_path }}
+  marker:
+    description: HTML marker used for sticky comment upsert
+    value: "<!-- scankit-pr-report -->"
+runs:
+  using: composite
+  steps:
+    - name: Build report
+      id: report
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        FINDINGS_JSON: ${{ inputs.findings-json }}
+        SUMMARY_MD: ${{ inputs.summary-md }}
+        MODE: ${{ inputs.mode }}
+        RUN_URL: ${{ inputs.run-url }}
+        COMMENT_PATH: ${{ inputs.comment-path }}
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/pr-report.sh" \
+          "$FINDINGS_JSON" \
+          "$COMMENT_PATH" \
+          "$MODE" \
+          "$RUN_URL" \
+          "$SUMMARY_MD"
+        echo "comment_path=$COMMENT_PATH" >>"$GITHUB_OUTPUT"
