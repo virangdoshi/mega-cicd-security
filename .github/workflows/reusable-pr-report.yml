@@ -37,7 +37,7 @@ jobs:
 
       - name: Build comment + annotations
         id: report
-        uses: virangdoshi/scankit/.github/actions/pr-report@13d328e875b62407c786249aa3fcb9107cfe9465
+        uses: virangdoshi/scankit/.github/actions/pr-report@80441dfa3b973ba2b4c5217789359e63d36d5eac
         with:
           findings-json: _scankit-pr-report/latest/findings-deduped.json
           summary-md: _scankit-pr-report/latest/summary.md
