@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Replace remaining `curl|sh` / unpinned npm/cargo/rustup installs with SHA256-verified release binaries, `npm ci` lockfile (`.github/pinned/npm-api`), and hashed ScanCode requirements (Scorecard Pinned-Dependencies)
+- Bump Trivy installs to v0.74.0 and KICS to v2.1.20 (release assets + checksums)
+- Digest-pin test fixture `alpine:3.19`; pin `tests/run.sh` actionlint download
 - Add SECURITY.md (vulnerability reporting + scope)
 - Pin pip installs with `--require-hashes` (`.github/pinned/*.txt`)
-- Verify release binary SHA256 (dockle, dive, slsa-verifier, php-security-checker)
+- Verify release binary SHA256 (dockle, dive, slsa-verifier, php-security-checker, trivy, bearer, syft, …)
 - Pin go tools to commit SHA / release tags (no `@latest`)
 - Move `security-events: write` to job-level; keep workflow defaults read-only
 - Bump test fixture `requests` to 2.33.0 (clears Scorecard Vulnerabilities false positive)
