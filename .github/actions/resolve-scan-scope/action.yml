@@ -1,0 +1,112 @@
+name: Resolve scan scope
+description: Resolve full vs diff scan scope and classify changed files
+inputs:
+  scan-scope:
+    description: auto | diff | full
+    required: false
+    default: auto
+  event-name:
+    description: github.event_name
+    required: false
+    default: ${{ github.event_name }}
+  base-sha:
+    description: Diff base SHA (PR base)
+    required: false
+    default: ${{ github.event.pull_request.base.sha }}
+  head-sha:
+    description: Diff head SHA (PR head)
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  out-dir:
+    description: Directory for changed-files.txt and scope.json
+    required: false
+    default: .
+outputs:
+  scan_scope:
+    description: Resolved scope (diff or full)
+    value: ${{ steps.resolve.outputs.scan_scope }}
+  changed_file_count:
+    description: Number of existing changed files
+    value: ${{ steps.resolve.outputs.changed_file_count }}
+  has_changed_files:
+    description: Whether any changed files exist
+    value: ${{ steps.resolve.outputs.has_changed_files }}
+  scope_sast:
+    value: ${{ steps.resolve.outputs.scope_sast }}
+  scope_secrets:
+    value: ${{ steps.resolve.outputs.scope_secrets }}
+  scope_sca:
+    value: ${{ steps.resolve.outputs.scope_sca }}
+  scope_iac:
+    value: ${{ steps.resolve.outputs.scope_iac }}
+  scope_container:
+    value: ${{ steps.resolve.outputs.scope_container }}
+  scope_api:
+    value: ${{ steps.resolve.outputs.scope_api }}
+  scope_privacy:
+    value: ${{ steps.resolve.outputs.scope_privacy }}
+  scope_malware:
+    value: ${{ steps.resolve.outputs.scope_malware }}
+  scope_meta:
+    value: ${{ steps.resolve.outputs.scope_meta }}
+  scope_sbom:
+    value: ${{ steps.resolve.outputs.scope_sbom }}
+  scope_supply:
+    value: ${{ steps.resolve.outputs.scope_supply }}
+  scope_go_code:
+    value: ${{ steps.resolve.outputs.scope_go_code }}
+  scope_ruby_code:
+    value: ${{ steps.resolve.outputs.scope_ruby_code }}
+  scope_java_code:
+    value: ${{ steps.resolve.outputs.scope_java_code }}
+  scope_python_manifest:
+    value: ${{ steps.resolve.outputs.scope_python_manifest }}
+  scope_go_manifest:
+    value: ${{ steps.resolve.outputs.scope_go_manifest }}
+  scope_node_manifest:
+    value: ${{ steps.resolve.outputs.scope_node_manifest }}
+  scope_rust_manifest:
+    value: ${{ steps.resolve.outputs.scope_rust_manifest }}
+  scope_ruby_manifest:
+    value: ${{ steps.resolve.outputs.scope_ruby_manifest }}
+  scope_php_manifest:
+    value: ${{ steps.resolve.outputs.scope_php_manifest }}
+  scope_dotnet_manifest:
+    value: ${{ steps.resolve.outputs.scope_dotnet_manifest }}
+  scope_dockerfile:
+    value: ${{ steps.resolve.outputs.scope_dockerfile }}
+  scope_workflows:
+    value: ${{ steps.resolve.outputs.scope_workflows }}
+  scope_any_manifest:
+    value: ${{ steps.resolve.outputs.scope_any_manifest }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve
+      id: resolve
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SCAN_SCOPE: ${{ inputs.scan-scope }}
+        EVENT_NAME: ${{ inputs.event-name }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        OUT_DIR: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/resolve-scan-scope.sh" \
+          "$SCAN_SCOPE" \
+          "$EVENT_NAME" \
+          "${BASE_SHA:-}" \
+          "${HEAD_SHA:-}" \
+          "$OUT_DIR"
+    - name: Upload changed-files
+      if: steps.resolve.outputs.scan_scope == 'diff'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: changed-files
+        path: |
+          ${{ inputs.out-dir }}/changed-files.txt
+          ${{ inputs.out-dir }}/scope.json
+        if-no-files-found: warn
