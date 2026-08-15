@@ -54,13 +54,21 @@ on:
       enable-scancode:
         type: boolean
         default: false
+      enable-image-build:
+        description: Allow docker build from Dockerfile (off by default for untrusted PRs)
+        type: boolean
+        default: false
+      enable-code-build:
+        description: Allow CodeQL autobuild / SpotBugs compile (off by default for untrusted PRs)
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
-  security-events: write
+  # Least privilege defaults; write scopes granted per-job below.
+  contents: read
   actions: read
   id-token: write
-  pull-requests: write
+  pull-requests: read
   packages: read
 
 jobs:
@@ -105,6 +113,13 @@ jobs:
 
   sca:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-sca.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -120,6 +135,13 @@ jobs:
 
   sast:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-sast.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -131,9 +153,17 @@ jobs:
       has_ruby: ${{ needs.detect.outputs.has_ruby }}
       has_java: ${{ needs.detect.outputs.has_java }}
       has_shell: ${{ needs.detect.outputs.has_shell }}
+      enable-code-build: ${{ inputs.enable-code-build }}
 
   container:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-container.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -144,9 +174,17 @@ jobs:
       dockerfile: ${{ inputs.dockerfile }}
       cosign-certificate-identity: ${{ inputs.cosign-certificate-identity }}
       cosign-certificate-oidc-issuer: ${{ inputs.cosign-certificate-oidc-issuer }}
+      enable-image-build: ${{ inputs.enable-image-build }}
 
   iac:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-iac.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -170,6 +208,13 @@ jobs:
 
   supply-chain:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-supply-chain.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -188,6 +233,13 @@ jobs:
 
   privacy:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-privacy.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -224,6 +276,13 @@ jobs:
 
   meta:
     needs: detect
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
     uses: ./.github/workflows/reusable-meta.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -246,7 +305,12 @@ jobs:
       - malware
       - meta
     if: always() && (inputs.results-publish-mode == 'branch' || inputs.results-publish-mode == 'pull-request')
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
     uses: ./.github/workflows/reusable-publish-results.yml
     with:
       results-publish-mode: ${{ inputs.results-publish-mode }}
       results-branch: ${{ inputs.results-branch }}
+      results-path: security-results

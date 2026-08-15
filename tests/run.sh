@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Test runner for mega-cicd-security scripts.
+# Test runner for scankit scripts.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -118,6 +118,8 @@ def sarif(tool, rule="TEST001"):
 (art / "tool-a.sarif").write_text(json.dumps(sarif("Trivy")))
 (art / "tool-b.sarif").write_text(json.dumps(sarif("Grype")))
 (art / "notes.txt").write_text("findings")
+(art / "detect-secrets.json").write_text('{"results":[]}')
+(art / "secretlint.json").write_text('[]')
 p = art / "huge.sarif"
 p.write_bytes(b"x" * (6 * 1024 * 1024))
 (art / "main.cvd").write_text("db")
@@ -136,6 +138,22 @@ if [[ -f "$DEST_ROOT/2099-01-01/main.cvd" ]]; then
 else
   echo "  PASS  clamav db skipped"
   PASS=$((PASS + 1))
+fi
+
+if [[ -f "$DEST_ROOT/2099-01-01/detect-secrets.json" ]] || [[ -f "$DEST_ROOT/2099-01-01/secretlint.json" ]]; then
+  echo "  FAIL  secret-scanner artifacts should not be copied"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS  secret-scanner artifacts skipped"
+  PASS=$((PASS + 1))
+fi
+
+if grep -q 'secret-scanner artifact' "$DEST_ROOT/2099-01-01/summary.md"; then
+  echo "  PASS  secret skip noted in summary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  secret skip not noted"
+  FAIL=$((FAIL + 1))
 fi
 
 if grep -q 'too large' "$DEST_ROOT/2099-01-01/summary.md"; then

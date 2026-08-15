@@ -11,18 +11,19 @@ Point app repos at this library:
 ```yaml
 jobs:
   security:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # enable-image-build / enable-code-build only on trusted refs
 ```
 
-Prefer a **commit SHA** (not `@main`) for supply-chain hygiene. Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
+Prefer a **commit SHA** (not `@main`) for supply-chain hygiene. Grant `contents: write` + `pull-requests: write` only when publishing results. Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
 
 ### Copy-paste templates
 
-Copy files from [`templates/`](../templates/) into the app’s `.github/workflows/`, replace `OWNER/mega-cicd-security`, and pin a commit SHA.
+Copy files from [`templates/`](../templates/) into the app’s `.github/workflows/`, replace `OWNER/scankit`, and pin a commit SHA.
 
 ## Required GitHub settings
 
@@ -32,7 +33,7 @@ Copy files from [`templates/`](../templates/) into the app’s `.github/workflow
 
 ## Private library access (org settings)
 
-When `mega-cicd-security` is **private**, application repositories cannot call `uses: org/mega-cicd-security/...` until access is granted:
+When `scankit` is **private**, application repositories cannot call `uses: org/scankit/...` until access is granted:
 
 1. Open the **library** repo → **Settings → Actions → General**.
 2. Under **Access**, choose:
@@ -61,4 +62,4 @@ Disable a single tool with the corresponding `enable-<tool>: false` input on the
 
 ## Org placement
 
-Publish under your org (for example `your-org/mega-cicd-security`), tag releases (`v1.0.0`), and reference those tags or commit SHAs from application repositories. Enable Dependabot (included in this repo) to keep Action SHAs current.
+Publish under your org (for example `your-org/scankit`), tag releases (`v1.0.0`), and reference those tags or commit SHAs from application repositories. Enable Dependabot (included in this repo) to keep Action SHAs current.

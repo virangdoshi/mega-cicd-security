@@ -31,7 +31,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   meta-actionlint:
@@ -57,6 +56,9 @@ jobs:
     name: meta-zizmor
     if: inputs.enable-zizmor && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Harden runner
         if: inputs.enable-harden-runner

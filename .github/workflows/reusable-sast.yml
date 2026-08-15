@@ -58,10 +58,13 @@ on:
       enable-shellcheck:
         type: boolean
         default: true
+      enable-code-build:
+        description: Allow CodeQL autobuild / SpotBugs compile (disable on untrusted PRs)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  security-events: write
   actions: read
 
 jobs:
@@ -69,6 +72,10 @@ jobs:
     name: sast-codeql
     if: inputs.enable-codeql && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -83,6 +90,7 @@ jobs:
           languages: ${{ matrix.language }}
         continue-on-error: true
       - name: Autobuild
+        if: inputs.enable-code-build
         uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         continue-on-error: true
       - name: Analyze
@@ -95,18 +103,24 @@ jobs:
     name: sast-semgrep
     if: inputs.enable-semgrep && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     container:
-      image: semgrep/semgrep:latest
+      image: semgrep/semgrep:1.110.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Semgrep scan
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           semgrep scan --config p/default --sarif --output semgrep.sarif . || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -134,11 +148,13 @@ jobs:
         with:
           python-version: "3.12"
       - name: Bandit
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
-          pip install bandit[toml]
+          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/bandit.txt"
           bandit -r . -f json -o bandit.json || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -152,6 +168,10 @@ jobs:
     name: sast-gosec
     if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,9 +180,11 @@ jobs:
         with:
           go-version: "1.23.x"
       - name: Gosec
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@955a68d0d19f4afb7503068f95059f7d0c529017  # v2.22.3
           if [[ -f go.mod ]]; then
             gosec -fmt=sarif -out=gosec.sarif ./... || EXIT=$?
           else
@@ -170,7 +192,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -190,11 +212,17 @@ jobs:
     name: sast-brakeman
     if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Brakeman
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           sudo gem install brakeman
@@ -205,7 +233,7 @@ jobs:
             EXIT=0
           fi
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -223,7 +251,7 @@ jobs:
 
   sast-spotbugs:
     name: sast-spotbugs
-    if: inputs.enable-spotbugs && (inputs.selection-mode == 'all' || inputs.has_java == 'true')
+    if: inputs.enable-spotbugs && inputs.enable-code-build && (inputs.selection-mode == 'all' || inputs.has_java == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -256,6 +284,10 @@ jobs:
     name: sast-devskim
     if: inputs.enable-devskim && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -265,13 +297,15 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: DevSkim
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           dotnet tool install --global Microsoft.CST.DevSkim.CLI
           export PATH="$PATH:$HOME/.dotnet/tools"
           devskim analyze --source-code . -o sarif -f devskim.sarif || EXIT=$?
           EXIT=${EXIT:-0}
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -296,6 +330,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: ShellCheck
+        env:
+          FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
@@ -324,7 +360,7 @@ jobs:
           pathlib.Path("shellcheck.sarif").write_text(json.dumps(sarif, indent=2))
           pathlib.Path("shellcheck-raw.txt").write_text(text)
           PY
-          if [[ "${{ inputs.fail-on-severity }}" != "NONE" && "$EXIT" -ne 0 ]]; then
+          if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

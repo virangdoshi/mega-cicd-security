@@ -1,5 +1,5 @@
 # Copy into your app repo as .github/workflows/security-sbom.yml
-# Replace OWNER/mega-cicd-security and prefer a commit SHA instead of @main.
+# Replace OWNER/scankit and prefer a commit SHA instead of @main.
 name: Security — sbom
 
 on:
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   sbom:
-    uses: OWNER/mega-cicd-security/.github/workflows/reusable-sbom.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-sbom.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH

@@ -35,7 +35,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   # Anchore Syft — generate SPDX + CycloneDX SBOMs for the repository
@@ -77,7 +76,7 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
       - name: Trivy SBOM
         run: |
           trivy fs --format spdx-json --output trivy.spdx.json .
@@ -102,7 +101,7 @@ jobs:
           node-version: "20"
       - name: cdxgen
         run: |
-          npx --yes @cyclonedx/cdxgen -r -o cdxgen.cdx.json || true
+          npx --yes @cyclonedx/cdxgen@11.2.3 -r -o cdxgen.cdx.json || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-cdxgen
@@ -115,6 +114,9 @@ jobs:
     if: inputs.enable-grype-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
     needs: [sbom-anchore-syft]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -191,7 +193,8 @@ jobs:
       - name: ScanCode
         run: |
           set -euo pipefail
-          pip install scancode-toolkit
+          # No hashed requirements file yet; version pin is still better than unpinned
+          pip install 'scancode-toolkit==32.3.0'
           scancode -clipeu --json-pp scancode.json . || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
