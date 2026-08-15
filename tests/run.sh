@@ -190,6 +190,47 @@ PY
 )
 assert_eq "dedup merges tools" "dedup_ok" "$DEDUP_STATUS"
 
+echo
+echo "== pr-report =="
+PR_TMP="$(mktemp -d)"
+# Reuse a minimal findings file
+cat >"$PR_TMP/findings.json" <<'JSON'
+{
+  "total_raw": 2,
+  "total_unique": 2,
+  "by_severity": {"HIGH": 1, "MEDIUM": 1},
+  "by_tool": {"Semgrep": 1, "Bandit": 1},
+  "findings": [
+    {"key": "a", "ruleId": "python.lang.security.audit", "severity": "HIGH", "location": "python/app.py:3", "message": "use of assert", "tools": ["Semgrep"], "sources": ["sast-semgrep"]},
+    {"key": "b", "ruleId": "B201", "severity": "MEDIUM", "location": "python/app.py:10", "message": "flask debug true", "tools": ["Bandit"], "sources": ["sast-bandit"]}
+  ]
+}
+JSON
+PR_OUT="$("$ROOT/scripts/pr-report.sh" "$PR_TMP/findings.json" "$PR_TMP/comment.md" both "https://example.test/run/1" 2>&1)"
+assert_file "pr comment exists" "$PR_TMP/comment.md"
+if grep -q 'scankit-pr-report' "$PR_TMP/comment.md" && grep -q 'Unique SARIF findings' "$PR_TMP/comment.md"; then
+  echo "  PASS  pr comment marker + summary"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr comment content"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s\n' "$PR_OUT" | grep -q '::error file=python/app.py,line=3'; then
+  echo "  PASS  pr annotation error"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation error missing"
+  FAIL=$((FAIL + 1))
+fi
+if printf '%s\n' "$PR_OUT" | grep -q '::warning file=python/app.py,line=10'; then
+  echo "  PASS  pr annotation warning"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr annotation warning missing"
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$PR_TMP"
+
 rm -rf "$ART" "$DEST_ROOT"
 
 echo
@@ -312,6 +353,7 @@ for f in \
   .github/workflows/reusable-malware.yml \
   .github/workflows/reusable-meta.yml \
   .github/workflows/reusable-publish-results.yml \
+  .github/workflows/reusable-pr-report.yml \
   .github/workflows/ci-self-test.yml \
   templates/security-all.yml \
   templates/security-all-scheduled.yml \
@@ -351,6 +393,22 @@ if grep -q 'scan-scope: full' templates/security-all-scheduled.yml; then
   PASS=$((PASS + 1))
 else
   echo "  FAIL  scheduled template missing scan-scope: full"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'pr-report-mode' .github/workflows/reusable-security-full.yml; then
+  echo "  PASS  full suite has pr-report-mode"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite missing pr-report-mode"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'pr-report-mode' .github/workflows/reusable-pr-report.yml; then
+  echo "  PASS  pr-report workflow present"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report workflow missing"
   FAIL=$((FAIL + 1))
 fi
 

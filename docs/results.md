@@ -5,9 +5,22 @@ Scanners always emit:
 1. **GitHub Actions artifacts** (JSON/SARIF/text per tool)
 2. **Code Scanning alerts** when SARIF upload succeeds (`security-events: write`)
 
+On **pull requests**, optionally post a **sticky PR comment** and/or **workflow annotations** via `pr-report-mode` (default `both`). This is separate from git publish.
+
 Optionally persist a summary **into git** via `results-publish-mode` on `reusable-security-full` / `reusable-publish-results`.
 
-## Modes
+## PR report (`pr-report-mode`)
+
+| Mode | Behavior |
+|------|----------|
+| `none` | No PR comment or workflow annotations |
+| `comment` | Upsert sticky comment (`<!-- scankit-pr-report -->`) with severity rollup + top findings |
+| `annotations` | Emit file/line `::error` / `::warning` / `::notice` annotations (capped per level) |
+| `both` (default) | Comment + annotations |
+
+Runs with `if: always()` after scanners so partial suites still report. Built from the same SARIF dedup as git publish (`findings-deduped.json`); secret-scanner raw artifacts stay excluded. Annotations appear on the PR Checks / Files views for the workflow run.
+
+## Git publish modes
 
 | Mode | Behavior |
 |------|----------|

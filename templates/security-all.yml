@@ -31,6 +31,7 @@ jobs:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # pr-report-mode: both  # sticky PR comment + annotations (default on pull_request)
       # scan-scope: auto  # diff on PRs, full on push/dispatch
       # Docker/compile of PR code is off by default:
       # enable-image-build: true

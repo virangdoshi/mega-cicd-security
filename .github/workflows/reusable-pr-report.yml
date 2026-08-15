@@ -1,0 +1,85 @@
+name: Reusable PR Report
+
+on:
+  workflow_call:
+    inputs:
+      pr-report-mode:
+        description: none | comment | annotations | both
+        type: string
+        default: both
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  pr-report:
+    name: pr-report
+    if: >
+      inputs.pr-report-mode != 'none' &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download scan artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          pattern: "*"
+        continue-on-error: true
+
+      - name: Aggregate
+        uses: virangdoshi/scankit/.github/actions/aggregate-results@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
+        with:
+          artifacts-dir: artifacts
+          out-root: _scankit-pr-report
+
+      - name: Build comment + annotations
+        id: report
+        uses: virangdoshi/scankit/.github/actions/pr-report@13d328e875b62407c786249aa3fcb9107cfe9465
+        with:
+          findings-json: _scankit-pr-report/latest/findings-deduped.json
+          summary-md: _scankit-pr-report/latest/summary.md
+          mode: ${{ inputs.pr-report-mode }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          comment-path: scankit-pr-comment.md
+
+      - name: Upsert sticky PR comment
+        if: inputs.pr-report-mode == 'comment' || inputs.pr-report-mode == 'both'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMENT_FILE: scankit-pr-comment.md
+          MARKER: "<!-- scankit-pr-report -->"
+        run: |
+          set -euo pipefail
+          if [[ ! -f "$COMMENT_FILE" ]]; then
+            echo "No comment body; skip"
+            exit 0
+          fi
+          COMMENT_ID="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" \
+              | head -n1 || true
+          )"
+          if [[ -n "${COMMENT_ID}" ]]; then
+            echo "Updating comment ${COMMENT_ID}"
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
+              -F "body=@${COMMENT_FILE}"
+          else
+            echo "Creating new sticky comment"
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -F "body=@${COMMENT_FILE}"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scankit-pr-report
+          path: |
+            scankit-pr-comment.md
+            _scankit-pr-report/latest/summary.md
+            _scankit-pr-report/latest/findings-deduped.json
+          if-no-files-found: warn

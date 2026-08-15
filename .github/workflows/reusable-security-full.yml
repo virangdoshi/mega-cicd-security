@@ -22,6 +22,10 @@ on:
       results-branch:
         type: string
         default: security-results
+      pr-report-mode:
+        description: On pull_request — none | comment | annotations | both (sticky PR summary + workflow annotations)
+        type: string
+        default: both
       image:
         type: string
         default: ""
@@ -404,3 +408,27 @@ jobs:
       results-publish-mode: ${{ inputs.results-publish-mode }}
       results-branch: ${{ inputs.results-branch }}
       results-path: security-results
+
+  pr-report:
+    needs:
+      - detect
+      - resolve-scope
+      - secrets
+      - sca
+      - sast
+      - container
+      - iac
+      - sbom
+      - supply-chain
+      - privacy
+      - api
+      - malware
+      - meta
+    if: always() && inputs.pr-report-mode != 'none' && github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    uses: ./.github/workflows/reusable-pr-report.yml
+    with:
+      pr-report-mode: ${{ inputs.pr-report-mode }}
