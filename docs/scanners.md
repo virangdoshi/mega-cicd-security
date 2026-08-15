@@ -6,7 +6,7 @@ Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`,
 |------|----------|----------------|-------|----------------|
 | OSV-Scanner | SCA | `has_generic_code` | yes | true |
 | Trivy filesystem | SCA | `has_generic_code` | yes | true |
-| Grype (dir) | SCA | `has_generic_code` | yes | true |
+| Grype (dir / Anchore scan-action) | SCA | `has_generic_code` | yes | true |
 | Dependency Review | SCA | `has_generic_code` (PR only) | n/a | true |
 | OWASP Dependency-Check | SCA | `has_generic_code` | no | true |
 | pip-audit | SCA | `has_python` | no | true |
@@ -31,7 +31,7 @@ Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`,
 | Hadolint | Container | `has_docker` | yes | true |
 | Dockle | Container | `has_docker` / image | no | true |
 | Trivy image | Container | `has_docker` / image | yes | true |
-| Grype image | Container | `has_docker` / image | yes | true |
+| Grype image (Anchore scan-action) | Container | `has_docker` / image | yes | true |
 | Dive | Container | `has_docker` / image | no | true |
 | Cosign verify | Container / Supply | image + identity inputs | no | true (skips if unset) |
 | Checkov | IaC | terraform/k8s/generic | yes | true |
@@ -44,10 +44,10 @@ Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`,
 | kube-score | IaC | `has_k8s` | no | true |
 | Kubescape | IaC | `has_k8s` | no | true |
 | cfn-guard | IaC | `has_cloudformation` | no | true |
-| Syft | SBOM | `has_generic_code` | n/a | true |
+| Anchore Syft (sbom-action) | SBOM | `has_generic_code` | n/a | true |
 | Trivy SBOM | SBOM | `has_generic_code` | n/a | true |
 | cdxgen | SBOM | `has_generic_code` | n/a | true |
-| Grype (SBOM) | SBOM | after Syft | no | true |
+| Anchore Grype (SBOM via scan-action) | SBOM | after Syft | yes | true |
 | ScanCode | License/SBOM | `has_generic_code` | no | **false** |
 | OpenSSF Scorecard | Supply chain | `has_generic_code` | yes | true |
 | GuardDog | Supply / Malware | python/node/go | no | true |
