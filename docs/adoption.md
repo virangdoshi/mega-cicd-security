@@ -2,6 +2,8 @@
 
 Step-by-step setup lives in the **[README](../README.md)**. This page covers organization rollout choices only.
 
+Upgrading from 1.0? See **[Upgrade 1.0 → 1.1](upgrade-1.1.md)**.
+
 ## Choose a consumption model
 
 ### Reusable workflows (recommended for orgs)
@@ -81,4 +83,29 @@ In **diff** mode:
 
 ## Org placement
 
-Publish under your org (for example `your-org/scankit`), tag releases (`v1.0.0`), and reference those tags or commit SHAs from application repositories. Enable Dependabot (included in this repo) to keep Action SHAs current.
+Publish under your org (for example `your-org/scankit`), tag releases (`v1.1.0`), and reference those tags or commit SHAs from application repositories. Enable Dependabot (included in this repo) to keep Action SHAs current.
+
+## Keeping scankit pins fresh (app repos)
+
+In each **caller** repository, Dependabot (or Renovate) can open PRs when you bump scankit releases, as long as `uses:` already pins a commit SHA:
+
+```yaml
+# .github/dependabot.yml (application repo)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 1
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+```
+
+After each scankit release, either merge the Dependabot PR or manually replace the SHA in your workflow with the release commit from the [Releases](https://github.com/virangdoshi/scankit/releases) page.
+
+## PR report noise
+
+Default `pr-report-mode: both` posts a sticky summary and file/line annotations. For quieter PRs set `pr-report-mode: comment` (summary only) or `none`. Annotations are most useful when `fail-on-severity` is high and you want Checks/Files highlights; intentional-vuln soak repos often use `fail-on-severity: NONE` plus `pr-report-mode: comment`.

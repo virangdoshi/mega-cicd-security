@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-08-15
+
 ### Added
 
 - **Diff-scoped scanning** (`scan-scope: auto|diff|full`, default `auto`): PRs scan changed files; push/`workflow_dispatch` scan the full tree. Path-filterable tools use the diff; tools that cannot path-scope are skipped unless the diff triggers them (lockfile, Dockerfile, workflows, etc.).
 - Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scankit-root`, `pr-report`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`, `scripts/pr-report.sh`
 - **PR report** (`pr-report-mode: none|comment|annotations|both`, default `both`): on `pull_request`, sticky summary comment + workflow file/line annotations from deduped SARIF findings (independent of `results-publish-mode`)
 - Anchore SBOM + Grype pipeline: `anchore/sbom-action` (Syft SPDX/CycloneDX) and `anchore/scan-action` Grype SBOM scan with SARIF → Code Scanning (`sbom-anchore-syft` / `sbom-anchore-grype`)
+- Upgrade guide: [`docs/upgrade-1.1.md`](docs/upgrade-1.1.md)
 
 ### Fixed
 
@@ -46,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enforce **commit-SHA pins** for all remote Actions (`scripts/check-action-pins.sh`); templates pin to a SHA instead of `@main`
 - Full-suite callers must grant `contents: write` + `pull-requests: write` + `security-events: write` (ceiling), even when `results-publish-mode: none`
 - Document `scan-scope` in README, adoption, scanners, and templates
+- Keep `pr-report-mode` default `both` (sticky comment + annotations); use `comment` or `none` for quieter PRs — see upgrade guide
 
 ## [1.0.0] — 2026-08-13
 
