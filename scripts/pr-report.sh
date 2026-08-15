@@ -41,19 +41,29 @@ total_unique = int(data.get("total_unique") or len(findings))
 total_raw = int(data.get("total_raw") or 0)
 
 def esc(s: str) -> str:
-    return (s or "").replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    # Workflow-command property values: escape % \r \n and commas/colons
+    # (property separators / ambiguity).
+    return (
+        (s or "")
+        .replace("%", "%25")
+        .replace("\r", "%0D")
+        .replace("\n", "%0A")
+        .replace(",", "%2C")
+        .replace(":", "%3A")
+    )
 
 def parse_loc(loc: str):
     if not loc:
         return "", ""
-    # uri:line — uri may contain colons (windows); split on last :digits
-    m = re.match(r"^(.*?):(\d+)$", loc)
+    # uri:line — split on last :digits (uri may contain colons)
+    m = re.match(r"^(.*):(\d+)$", loc)
     if not m:
         return loc, ""
     path, line = m.group(1), m.group(2)
-    # normalize file:/// and leading ./
-    path = re.sub(r"^file://", "", path)
-    path = path.lstrip("./")
+    if path.startswith("file://"):
+        path = path[len("file://") :]
+    if path.startswith("./"):
+        path = path[2:]
     return path, line
 
 want_comment = mode in ("comment", "both")
@@ -62,6 +72,8 @@ want_ann = mode in ("annotations", "both")
 # --- workflow command annotations (limit per level per step) ---
 if want_ann:
     counts = {"error": 0, "warning": 0, "notice": 0}
+    emitted = 0
+    skipped_no_loc = 0
     for f in findings:
         sev = (f.get("severity") or "UNKNOWN").upper()
         if sev == "HIGH":
@@ -70,21 +82,26 @@ if want_ann:
             level, cap = "warning", max_warning
         else:
             level, cap = "notice", max_notice
-        if counts[level] >= cap:
-            continue
         path, line = parse_loc(f.get("location") or "")
         if not path or not line:
+            skipped_no_loc += 1
             continue
-        tools = ",".join(f.get("tools") or []) or "scankit"
+        if counts[level] >= cap:
+            continue
+        tools = "/".join(f.get("tools") or []) or "scankit"
         rule = f.get("ruleId") or "unknown"
         msg = (f.get("message") or rule).replace("\n", " ")[:180]
         title = f"[{tools}] {rule}"
         # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions
         print(f"::{level} file={path},line={line},title={esc(title)}::{esc(msg)}")
         counts[level] += 1
-    omitted = total_unique - sum(counts.values())
-    if omitted > 0:
-        print(f"::notice::scankit: {omitted} additional unique findings omitted from annotations (cap {max_error}+{max_warning}+{max_notice})")
+        emitted += 1
+    capped = max(0, total_unique - emitted - skipped_no_loc)
+    if capped > 0:
+        print(
+            f"::notice::scankit: {capped} additional unique findings omitted from annotations "
+            f"(cap {max_error}+{max_warning}+{max_notice} per level)"
+        )
 
 # --- sticky PR comment markdown ---
 lines = [
@@ -134,7 +151,6 @@ pathlib.Path(out_comment).write_text("\n".join(lines) + "\n")
 step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if step_summary and want_comment:
     with open(step_summary, "a", encoding="utf-8") as fh:
-        # strip HTML marker for step summary readability
         body = "\n".join(lines[1:])
         fh.write(body)
         fh.write("\n")

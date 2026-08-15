@@ -47,6 +47,7 @@ jobs:
 
       - name: Upsert sticky PR comment
         if: inputs.pr-report-mode == 'comment' || inputs.pr-report-mode == 'both'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -63,14 +64,15 @@ jobs:
               --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" \
               | head -n1 || true
           )"
+          # Prefer JSON body so markdown is not mangled by form encoding edge cases.
           if [[ -n "${COMMENT_ID}" ]]; then
             echo "Updating comment ${COMMENT_ID}"
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" \
-              -F "body=@${COMMENT_FILE}"
+            jq -Rs '{body: .}' <"$COMMENT_FILE" \
+              | gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${COMMENT_ID}" --input -
           else
             echo "Creating new sticky comment"
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-              -F "body=@${COMMENT_FILE}"
+            jq -Rs '{body: .}' <"$COMMENT_FILE" \
+              | gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --input -
           fi
 
       - name: Upload report artifact

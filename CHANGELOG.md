@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TruffleHog: replace broken `--only-verified=false` with `--results=verified,unknown`; honor `fail-on-severity: NONE` for Gitleaks/TruffleHog via `continue-on-error`
 - Regenerate `flare-capa` / `presidio-analyzer` hash pins with `pip-compile --allow-unsafe` (pip/setuptools); bump ratchet job to Go 1.24
 - Semgrep container jobs: set `shell: bash` so `mapfile` / `[[` work (container default is `sh`)
+- PR report annotations: strip `./` prefix correctly (`lstrip` bug); escape `,`/`:` in titles; accurate cap/omit counts
 - Restore `reusable-security-full` workflow-level permission ceiling (`contents`/`pull-requests`/`security-events: write`) so nested job scopes are valid for cross-repo callers (avoids silent `startup_failure`)
 
 ### Security
