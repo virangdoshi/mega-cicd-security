@@ -12,6 +12,18 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_supply:
+        type: string
+        default: "true"
+      scope_workflows:
+        type: string
+        default: "true"
+      scope_any_manifest:
+        type: string
+        default: "true"
       has_generic_code:
         type: string
         default: "true"
@@ -79,7 +91,7 @@ permissions:
 jobs:
   supply-scorecard:
     name: supply-scorecard
-    if: inputs.enable-scorecard && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-scorecard && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -105,7 +117,7 @@ jobs:
 
   supply-guarddog:
     name: supply-guarddog
-    if: inputs.enable-guarddog && (inputs.selection-mode == 'all' || inputs.has_python == 'true' || inputs.has_node == 'true' || inputs.has_go == 'true')
+    if: inputs.enable-guarddog && (inputs.selection-mode == 'all' || inputs.has_python == 'true' || inputs.has_node == 'true' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_any_manifest == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -138,7 +150,7 @@ jobs:
 
   supply-sbomqs:
     name: supply-sbomqs
-    if: inputs.enable-sbomqs && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-sbomqs && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_any_manifest == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -166,7 +178,7 @@ jobs:
 
   supply-pinact:
     name: supply-pinact
-    if: inputs.enable-pinact && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    if: inputs.enable-pinact && (inputs.selection-mode == 'all' || inputs.has_actions == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_workflows == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -196,7 +208,7 @@ jobs:
 
   supply-ratchet:
     name: supply-ratchet
-    if: inputs.enable-ratchet && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    if: inputs.enable-ratchet && (inputs.selection-mode == 'all' || inputs.has_actions == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_workflows == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -229,7 +241,7 @@ jobs:
 
   supply-slsa-verifier:
     name: supply-slsa-verifier
-    if: inputs.enable-slsa-verifier && inputs.slsa-artifact != '' && inputs.slsa-source-uri != ''
+    if: inputs.enable-slsa-verifier && inputs.slsa-artifact != '' && inputs.slsa-source-uri != '' && (inputs.scan-scope != 'diff' || inputs.scope_supply == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -256,7 +268,7 @@ jobs:
 
   supply-cosign-verify:
     name: supply-cosign-verify
-    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != ''
+    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != '' && (inputs.scan-scope != 'diff' || inputs.scope_supply == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -279,7 +291,7 @@ jobs:
 
   supply-security-insights:
     name: supply-security-insights
-    if: inputs.enable-security-insights && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-security-insights && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_supply == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

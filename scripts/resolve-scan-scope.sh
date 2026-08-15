@@ -157,15 +157,13 @@ else
   if match_any '(^|/)(composer\.json|composer\.lock)$'; then scope_php_manifest=true; fi
   if match_any '\.(csproj|fsproj|sln)$'; then scope_dotnet_manifest=true; fi
 
-  if match_any '\.(tf|tf\.json)$|(^|/)(Chart\.ya?ml)$|^apiVersion:'; then
-    : # apiVersion match on filename won't work; use yaml/yml for k8s heuristic below
-  fi
-  if match_any '\.(tf|tf\.json)$|(^|/)Chart\.ya?ml$|\.(ya?ml)$'; then
-    # YAML may be k8s/cfn; gate IaC broadly on yaml/tf
+  if match_any '\.(tf|tf\.json)$|(^|/)Chart\.ya?ml$'; then
     scope_iac=true
   fi
-  # Narrower: terraform always; k8s/cfn if yaml changed (tools filter further)
-  if match_any '\.(tf|tf\.json)$|(^|/)Chart\.ya?ml$'; then scope_iac=true; fi
+  # YAML outside Actions workflows may be k8s/cfn (broad gate; tools filter further)
+  if grep -E '\.(ya?ml)$' "$CHANGED_FILE" 2>/dev/null | grep -Ev '(^|/)\.github/workflows/' | grep -q .; then
+    scope_iac=true
+  fi
 
   if match_any '(^|/)Dockerfile(\.|$)|(^|/)[^/]*\.dockerfile$|(^|/)(docker-compose|compose)\.ya?ml$'; then
     scope_container=true

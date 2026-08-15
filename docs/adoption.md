@@ -59,6 +59,22 @@ Forks of private libraries do **not** inherit reusable-workflow access — point
 
 Disable a single tool with the corresponding `enable-<tool>: false` input on the category reusable.
 
+## Scan scope (diff vs full)
+
+`reusable-security-full` input `scan-scope`:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | `diff` on `pull_request`, `full` on push / `workflow_dispatch` |
+| `diff` | Only consider files changed vs the PR base (or skip tools that cannot path-scope) |
+| `full` | Scan the whole checkout |
+
+In **diff** mode:
+
+- Tools that accept path lists (Semgrep, Bandit, detect-secrets, etc.) scan only matching changed files.
+- Tools that cannot path-scope (CodeQL, Gosec, Scorecard, image scanners, …) are **skipped** unless the diff gives them a reason to run (e.g. lockfile → SCA, Dockerfile → container, `.github/workflows/**` → meta/pinact).
+- SCA/SBOM still run against the repo/manifests when a relevant lockfile/manifest is in the diff (not path-filtered).
+
 ## Org placement
 
 Publish under your org (for example `your-org/scankit`), tag releases (`v1.0.0`), and reference those tags or commit SHAs from application repositories. Enable Dependabot (included in this repo) to keep Action SHAs current.

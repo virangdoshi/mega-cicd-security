@@ -12,6 +12,15 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_container:
+        type: string
+        default: "true"
+      scope_dockerfile:
+        type: string
+        default: "true"
       has_docker:
         type: string
         default: "true"
@@ -59,7 +68,7 @@ permissions:
 jobs:
   container-hadolint:
     name: container-hadolint
-    if: inputs.enable-hadolint && (inputs.selection-mode == 'all' || inputs.has_docker == 'true')
+    if: inputs.enable-hadolint && (inputs.selection-mode == 'all' || inputs.has_docker == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_dockerfile == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -92,7 +101,7 @@ jobs:
 
   container-dockle:
     name: container-dockle
-    if: inputs.enable-dockle && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    if: inputs.enable-dockle && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '') && (inputs.scan-scope != 'diff' || inputs.scope_container == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,7 +151,7 @@ jobs:
 
   container-trivy-image:
     name: container-trivy-image
-    if: inputs.enable-trivy-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    if: inputs.enable-trivy-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '') && (inputs.scan-scope != 'diff' || inputs.scope_container == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -201,7 +210,7 @@ jobs:
 
   container-grype-image:
     name: container-grype-image
-    if: inputs.enable-grype-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    if: inputs.enable-grype-image && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '') && (inputs.scan-scope != 'diff' || inputs.scope_container == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -248,7 +257,7 @@ jobs:
 
   container-dive:
     name: container-dive
-    if: inputs.enable-dive && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '')
+    if: inputs.enable-dive && (inputs.selection-mode == 'all' || inputs.has_docker == 'true' || inputs.image != '') && (inputs.scan-scope != 'diff' || inputs.scope_container == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -290,7 +299,7 @@ jobs:
 
   container-cosign-verify:
     name: container-cosign-verify
-    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != ''
+    if: inputs.enable-cosign-verify && inputs.image != '' && inputs.cosign-certificate-identity != '' && (inputs.scan-scope != 'diff' || inputs.scope_container == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Install cosign

@@ -12,6 +12,15 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_meta:
+        type: string
+        default: "true"
+      scope_workflows:
+        type: string
+        default: "true"
       has_actions:
         type: string
         default: "true"
@@ -35,7 +44,7 @@ permissions:
 jobs:
   meta-actionlint:
     name: meta-actionlint
-    if: inputs.enable-actionlint && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    if: inputs.enable-actionlint && (inputs.selection-mode == 'all' || inputs.has_actions == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_workflows == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
@@ -54,7 +63,7 @@ jobs:
 
   meta-zizmor:
     name: meta-zizmor
-    if: inputs.enable-zizmor && (inputs.selection-mode == 'all' || inputs.has_actions == 'true')
+    if: inputs.enable-zizmor && (inputs.selection-mode == 'all' || inputs.has_actions == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_workflows == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read

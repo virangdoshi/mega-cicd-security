@@ -2,6 +2,8 @@
 
 Kitchen-sink OSS tools. Overlap is intentional. With `selection-mode: detected`, tools run only when the matching ecosystem flag is true (or always for polyglot scanners when `has_generic_code` is true).
 
+With `scan-scope: auto` (default), pull requests use **diff** mode: path-filterable tools scan changed files only; tools that cannot path-scope are skipped unless the diff includes a relevant trigger (lockfile, Dockerfile, workflow, etc.). Push/`workflow_dispatch` use **full** mode.
+
 | Tool | Category | Ecosystem flag | SARIF | Default enable |
 |------|----------|----------------|-------|----------------|
 | OSV-Scanner | SCA | `has_generic_code` | yes | true |

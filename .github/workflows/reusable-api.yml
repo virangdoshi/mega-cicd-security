@@ -12,6 +12,12 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_api:
+        type: string
+        default: "true"
       has_openapi:
         type: string
         default: "true"
@@ -40,12 +46,24 @@ permissions:
 jobs:
   api-spectral:
     name: api-spectral
-    if: inputs.enable-spectral && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    if: inputs.enable-spectral && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_api == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Download changed-files
+        if: inputs.scan-scope == 'diff'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: changed-files
+          path: .
+      - name: Prepare scan paths
+        id: paths
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@28b09fb9792195856016dd519b67070bf6620b13
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          patterns: '(openapi|swagger|asyncapi).*\.(ya?ml|json)$|\.(graphql|gql)$'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
@@ -59,6 +77,18 @@ jobs:
           mapfile -t SPECS < <(find . -type f \( -iname 'openapi*.yml' -o -iname 'openapi*.yaml' -o -iname 'openapi*.json' -o -iname 'swagger*.yml' -o -iname 'swagger*.yaml' -o -iname 'swagger*.json' -o -iname 'asyncapi*.yml' -o -iname 'asyncapi*.yaml' -o -iname 'asyncapi*.json' \) ! -path './.git/*' ! -path './node_modules/*')
           if [[ -n "$API_SPEC_PATHS" ]]; then
             read -r -a SPECS <<< "$API_SPEC_PATHS"
+          fi
+          if [[ "${{ inputs.scan-scope }}" == "diff" && -f "${{ steps.paths.outputs.paths_file }}" ]]; then
+            mapfile -t CHANGED < "${{ steps.paths.outputs.paths_file }}"
+            FILTERED=()
+            for s in "${SPECS[@]}"; do
+              for c in "${CHANGED[@]}"; do
+                if [[ "$s" == "./$c" || "$s" == "$c" || "$s" == */"$c" ]]; then FILTERED+=("$s"); break; fi
+                # also allow if changed path equals stripped ./
+                sp="${s#./}"; [[ "$sp" == "$c" ]] && FILTERED+=("$s") && break
+              done
+            done
+            SPECS=("${FILTERED[@]}")
           fi
           if [[ ${#SPECS[@]} -eq 0 ]]; then
             echo "No API specs found"; echo '[]' > spectral.json; exit 0
@@ -82,7 +112,7 @@ jobs:
 
   api-vacuum:
     name: api-vacuum
-    if: inputs.enable-vacuum && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    if: inputs.enable-vacuum && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_api == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,7 +143,7 @@ jobs:
 
   api-graphql-linter:
     name: api-graphql-linter
-    if: inputs.enable-graphql-linter && (inputs.selection-mode == 'all' || inputs.has_graphql == 'true')
+    if: inputs.enable-graphql-linter && (inputs.selection-mode == 'all' || inputs.has_graphql == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_api == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,7 +176,7 @@ jobs:
 
   api-ibm-openapi-validator:
     name: api-ibm-openapi-validator
-    if: inputs.enable-ibm-openapi-validator && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true')
+    if: inputs.enable-ibm-openapi-validator && (inputs.selection-mode == 'all' || inputs.has_openapi == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_api == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

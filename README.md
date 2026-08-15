@@ -48,7 +48,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   security-events: write
   actions: read
   id-token: write
@@ -65,10 +66,11 @@ jobs:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # scan-scope: auto   # default — diff on pull_request, full on push/dispatch
       # enable-image-build / enable-code-build stay false on untrusted PRs
 ```
 
-Prefer a **commit SHA** (or immutable release tag) instead of `@main` in production. Third-party Actions inside this library are already SHA-pinned. For results publish, grant `contents: write` + `pull-requests: write` and set `results-publish-mode`.
+Prefer a **commit SHA** (or immutable release tag) instead of `@main` in production. Third-party Actions inside this library are already SHA-pinned. Caller permissions must match the full-suite ceiling (`contents: write` + `pull-requests: write` + `security-events: write`, even when publish mode is `none`).
 
 **Or copy a template:**
 
@@ -96,8 +98,9 @@ On each run: detect ecosystems → parallel category scanners → SARIF + artifa
 ┌─────────────────────────────┐
 │   reusable-security-full    │
 │  1. detect ecosystems       │
-│  2. parallel category jobs  │
-│  3. optional publish        │
+│  2. resolve scan scope      │
+│  3. parallel category jobs  │
+│  4. optional publish        │
 └──────────────┬──────────────┘
                ▼
      Code Scanning + Artifacts

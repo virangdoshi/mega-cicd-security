@@ -12,6 +12,10 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        description: auto (diff on PR, full otherwise) | diff | full
+        type: string
+        default: auto
       results-publish-mode:
         type: string
         default: none
@@ -105,17 +109,64 @@ jobs:
         # Full owner/repo/path@sha — relative ./ resolves to the *caller* repo and breaks cross-repo use
         uses: virangdoshi/scankit/.github/actions/detect-ecosystems@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
 
+  resolve-scope:
+    name: resolve-scan-scope
+    runs-on: ubuntu-latest
+    outputs:
+      scan_scope: ${{ steps.scope.outputs.scan_scope }}
+      changed_file_count: ${{ steps.scope.outputs.changed_file_count }}
+      has_changed_files: ${{ steps.scope.outputs.has_changed_files }}
+      scope_sast: ${{ steps.scope.outputs.scope_sast }}
+      scope_secrets: ${{ steps.scope.outputs.scope_secrets }}
+      scope_sca: ${{ steps.scope.outputs.scope_sca }}
+      scope_iac: ${{ steps.scope.outputs.scope_iac }}
+      scope_container: ${{ steps.scope.outputs.scope_container }}
+      scope_api: ${{ steps.scope.outputs.scope_api }}
+      scope_privacy: ${{ steps.scope.outputs.scope_privacy }}
+      scope_malware: ${{ steps.scope.outputs.scope_malware }}
+      scope_meta: ${{ steps.scope.outputs.scope_meta }}
+      scope_sbom: ${{ steps.scope.outputs.scope_sbom }}
+      scope_supply: ${{ steps.scope.outputs.scope_supply }}
+      scope_go_code: ${{ steps.scope.outputs.scope_go_code }}
+      scope_ruby_code: ${{ steps.scope.outputs.scope_ruby_code }}
+      scope_java_code: ${{ steps.scope.outputs.scope_java_code }}
+      scope_python_manifest: ${{ steps.scope.outputs.scope_python_manifest }}
+      scope_go_manifest: ${{ steps.scope.outputs.scope_go_manifest }}
+      scope_node_manifest: ${{ steps.scope.outputs.scope_node_manifest }}
+      scope_rust_manifest: ${{ steps.scope.outputs.scope_rust_manifest }}
+      scope_ruby_manifest: ${{ steps.scope.outputs.scope_ruby_manifest }}
+      scope_php_manifest: ${{ steps.scope.outputs.scope_php_manifest }}
+      scope_dotnet_manifest: ${{ steps.scope.outputs.scope_dotnet_manifest }}
+      scope_dockerfile: ${{ steps.scope.outputs.scope_dockerfile }}
+      scope_workflows: ${{ steps.scope.outputs.scope_workflows }}
+      scope_any_manifest: ${{ steps.scope.outputs.scope_any_manifest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          fetch-depth: 0
+      - name: Resolve scan scope
+        id: scope
+        uses: virangdoshi/scankit/.github/actions/resolve-scan-scope@28b09fb9792195856016dd519b67070bf6620b13
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
   secrets:
-    needs: detect
+    needs: [detect, resolve-scope]
     uses: ./.github/workflows/reusable-secrets.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
       fail-on-severity: ${{ inputs.fail-on-severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_secrets: ${{ needs.resolve-scope.outputs.scope_secrets }}
 
   sca:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -135,9 +186,18 @@ jobs:
       has_rust: ${{ needs.detect.outputs.has_rust }}
       has_ruby: ${{ needs.detect.outputs.has_ruby }}
       has_php: ${{ needs.detect.outputs.has_php }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sca: ${{ needs.resolve-scope.outputs.scope_sca }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
+      scope_python_manifest: ${{ needs.resolve-scope.outputs.scope_python_manifest }}
+      scope_go_manifest: ${{ needs.resolve-scope.outputs.scope_go_manifest }}
+      scope_node_manifest: ${{ needs.resolve-scope.outputs.scope_node_manifest }}
+      scope_rust_manifest: ${{ needs.resolve-scope.outputs.scope_rust_manifest }}
+      scope_ruby_manifest: ${{ needs.resolve-scope.outputs.scope_ruby_manifest }}
+      scope_php_manifest: ${{ needs.resolve-scope.outputs.scope_php_manifest }}
 
   sast:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -157,9 +217,14 @@ jobs:
       has_java: ${{ needs.detect.outputs.has_java }}
       has_shell: ${{ needs.detect.outputs.has_shell }}
       enable-code-build: ${{ inputs.enable-code-build }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sast: ${{ needs.resolve-scope.outputs.scope_sast }}
+      scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
+      scope_ruby_code: ${{ needs.resolve-scope.outputs.scope_ruby_code }}
+      scope_java_code: ${{ needs.resolve-scope.outputs.scope_java_code }}
 
   container:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -178,9 +243,12 @@ jobs:
       cosign-certificate-identity: ${{ inputs.cosign-certificate-identity }}
       cosign-certificate-oidc-issuer: ${{ inputs.cosign-certificate-oidc-issuer }}
       enable-image-build: ${{ inputs.enable-image-build }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_container: ${{ needs.resolve-scope.outputs.scope_container }}
+      scope_dockerfile: ${{ needs.resolve-scope.outputs.scope_dockerfile }}
 
   iac:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -198,9 +266,11 @@ jobs:
       has_k8s: ${{ needs.detect.outputs.has_k8s }}
       has_cloudformation: ${{ needs.detect.outputs.has_cloudformation }}
       conftest-policy-path: ${{ inputs.conftest-policy-path }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_iac: ${{ needs.resolve-scope.outputs.scope_iac }}
 
   sbom:
-    needs: detect
+    needs: [detect, resolve-scope]
     uses: ./.github/workflows/reusable-sbom.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -208,9 +278,11 @@ jobs:
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       enable-scancode: ${{ inputs.enable-scancode }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sbom: ${{ needs.resolve-scope.outputs.scope_sbom }}
 
   supply-chain:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -233,9 +305,13 @@ jobs:
       cosign-certificate-oidc-issuer: ${{ inputs.cosign-certificate-oidc-issuer }}
       slsa-artifact: ${{ inputs.slsa-artifact }}
       slsa-source-uri: ${{ inputs.slsa-source-uri }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_supply: ${{ needs.resolve-scope.outputs.scope_supply }}
+      scope_workflows: ${{ needs.resolve-scope.outputs.scope_workflows }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
 
   privacy:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -250,9 +326,11 @@ jobs:
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       privacy-paths: ${{ inputs.privacy-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_privacy: ${{ needs.resolve-scope.outputs.scope_privacy }}
 
   api:
-    needs: detect
+    needs: [detect, resolve-scope]
     uses: ./.github/workflows/reusable-api.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -261,9 +339,11 @@ jobs:
       has_openapi: ${{ needs.detect.outputs.has_openapi }}
       has_graphql: ${{ needs.detect.outputs.has_graphql }}
       api-spec-paths: ${{ inputs.api-spec-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_api: ${{ needs.resolve-scope.outputs.scope_api }}
 
   malware:
-    needs: detect
+    needs: [detect, resolve-scope]
     uses: ./.github/workflows/reusable-malware.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
@@ -276,9 +356,12 @@ jobs:
       has_go: ${{ needs.detect.outputs.has_go }}
       malware-scan-paths: ${{ inputs.malware-scan-paths }}
       malware-binary-paths: ${{ inputs.malware-binary-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_malware: ${{ needs.resolve-scope.outputs.scope_malware }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
 
   meta:
-    needs: detect
+    needs: [detect, resolve-scope]
     permissions:
       contents: read
       security-events: write
@@ -292,10 +375,14 @@ jobs:
       fail-on-severity: ${{ inputs.fail-on-severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_actions: ${{ needs.detect.outputs.has_actions }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_meta: ${{ needs.resolve-scope.outputs.scope_meta }}
+      scope_workflows: ${{ needs.resolve-scope.outputs.scope_workflows }}
 
   publish:
     needs:
       - detect
+      - resolve-scope
       - secrets
       - sca
       - sast
