@@ -12,6 +12,12 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_sbom:
+        type: string
+        default: "true"
       has_generic_code:
         type: string
         default: "true"
@@ -40,7 +46,7 @@ jobs:
   # Anchore Syft — generate SPDX + CycloneDX SBOMs for the repository
   sbom-anchore-syft:
     name: sbom-anchore-syft
-    if: inputs.enable-syft && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-syft && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sbom == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,7 +75,7 @@ jobs:
 
   sbom-trivy:
     name: sbom-trivy
-    if: inputs.enable-trivy-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-trivy-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sbom == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,7 +103,7 @@ jobs:
 
   sbom-cdxgen:
     name: sbom-cdxgen
-    if: inputs.enable-cdxgen && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-cdxgen && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sbom == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -118,7 +124,7 @@ jobs:
   # Anchore Grype — vulnerability scan of the Syft CycloneDX SBOM (+ SARIF to Code Scanning)
   sbom-anchore-grype:
     name: sbom-anchore-grype
-    if: inputs.enable-grype-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-grype-sbom && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sbom == 'true')
     needs: [sbom-anchore-syft]
     runs-on: ubuntu-latest
     permissions:
@@ -191,7 +197,7 @@ jobs:
 
   sbom-scancode:
     name: sbom-scancode
-    if: inputs.enable-scancode && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-scancode && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sbom == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

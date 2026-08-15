@@ -12,6 +12,12 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        type: string
+        default: full
+      scope_iac:
+        type: string
+        default: "true"
       has_generic_code:
         type: string
         default: "true"
@@ -64,7 +70,7 @@ permissions:
 jobs:
   iac-checkov:
     name: iac-checkov
-    if: inputs.enable-checkov && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    if: inputs.enable-checkov && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -95,7 +101,7 @@ jobs:
 
   iac-kics:
     name: iac-kics
-    if: inputs.enable-kics && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    if: inputs.enable-kics && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -134,7 +140,7 @@ jobs:
 
   iac-trivy-config:
     name: iac-trivy-config
-    if: inputs.enable-trivy-config && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true')
+    if: inputs.enable-trivy-config && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -177,7 +183,7 @@ jobs:
 
   iac-terrascan:
     name: iac-terrascan
-    if: inputs.enable-terrascan && (inputs.selection-mode == 'all' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true' || inputs.has_generic_code == 'true')
+    if: inputs.enable-terrascan && (inputs.selection-mode == 'all' || inputs.has_terraform == 'true' || inputs.has_k8s == 'true' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -204,7 +210,7 @@ jobs:
 
   iac-conftest:
     name: iac-conftest
-    if: inputs.enable-conftest && inputs.conftest-policy-path != ''
+    if: inputs.enable-conftest && inputs.conftest-policy-path != '' && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -234,7 +240,7 @@ jobs:
 
   iac-kube-linter:
     name: iac-kube-linter
-    if: inputs.enable-kube-linter && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    if: inputs.enable-kube-linter && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -261,7 +267,7 @@ jobs:
 
   iac-kubeconform:
     name: iac-kubeconform
-    if: inputs.enable-kubeconform && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    if: inputs.enable-kubeconform && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -292,7 +298,7 @@ jobs:
 
   iac-kube-score:
     name: iac-kube-score
-    if: inputs.enable-kube-score && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    if: inputs.enable-kube-score && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -323,7 +329,7 @@ jobs:
 
   iac-kubescape:
     name: iac-kubescape
-    if: inputs.enable-kubescape && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true')
+    if: inputs.enable-kubescape && (inputs.selection-mode == 'all' || inputs.has_k8s == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -352,7 +358,7 @@ jobs:
 
   iac-cfn-guard:
     name: iac-cfn-guard
-    if: inputs.enable-cfn-guard && (inputs.selection-mode == 'all' || inputs.has_cloudformation == 'true')
+    if: inputs.enable-cfn-guard && (inputs.selection-mode == 'all' || inputs.has_cloudformation == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_iac == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

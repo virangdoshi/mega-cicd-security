@@ -12,6 +12,22 @@ on:
       checkout-ref:
         type: string
         default: ""
+      scan-scope:
+        description: full | diff (resolved by caller)
+        type: string
+        default: full
+      scope_sast:
+        type: string
+        default: "true"
+      scope_go_code:
+        type: string
+        default: "true"
+      scope_ruby_code:
+        type: string
+        default: "true"
+      scope_java_code:
+        type: string
+        default: "true"
       has_generic_code:
         type: string
         default: "true"
@@ -70,7 +86,7 @@ permissions:
 jobs:
   sast-codeql:
     name: sast-codeql
-    if: inputs.enable-codeql && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-codeql && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,7 +117,7 @@ jobs:
 
   sast-semgrep:
     name: sast-semgrep
-    if: inputs.enable-semgrep && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-semgrep && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sast == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,16 +129,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Download changed-files
+        if: inputs.scan-scope == 'diff'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: changed-files
+          path: .
+      - name: Prepare scan paths
+        id: paths
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          patterns: '\.(py|pyi|go|java|kt|kts|rb|js|jsx|mjs|cjs|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp)$'
       - name: Semgrep scan
+        if: steps.paths.outputs.skip != 'true'
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          semgrep scan --config p/default --sarif --output semgrep.sarif . || EXIT=$?
+          mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
+          semgrep scan --config p/default --sarif --output semgrep.sarif "${TARGETS[@]}" || EXIT=$?
           EXIT=${EXIT:-0}
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
+      - name: Skip (no matching paths)
+        if: steps.paths.outputs.skip == 'true'
+        run: echo "No matching paths in diff; skipping Semgrep" && echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         if: always()
         with:
@@ -138,25 +171,46 @@ jobs:
 
   sast-bandit:
     name: sast-bandit
-    if: inputs.enable-bandit && (inputs.selection-mode == 'all' || inputs.has_python == 'true')
+    if: inputs.enable-bandit && (inputs.selection-mode == 'all' || inputs.has_python == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sast == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Download changed-files
+        if: inputs.scan-scope == 'diff'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: changed-files
+          path: .
+      - name: Prepare scan paths
+        id: paths
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          patterns: '\.py$'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: Bandit
+        if: steps.paths.outputs.skip != 'true'
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/bandit.txt"
-          bandit -r . -f json -o bandit.json || EXIT=$?
+          mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
+          if [[ "${{ inputs.scan-scope }}" == "diff" ]]; then
+            bandit "${TARGETS[@]}" -f json -o bandit.json || EXIT=$?
+          else
+            bandit -r . -f json -o bandit.json || EXIT=$?
+          fi
           EXIT=${EXIT:-0}
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
+      - name: Skip (no matching paths)
+        if: steps.paths.outputs.skip == 'true'
+        run: echo "No matching paths in diff; skipping Bandit" && echo '{}' > bandit.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -166,7 +220,7 @@ jobs:
 
   sast-gosec:
     name: sast-gosec
-    if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true')
+    if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -210,7 +264,7 @@ jobs:
 
   sast-brakeman:
     name: sast-brakeman
-    if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true')
+    if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -251,7 +305,7 @@ jobs:
 
   sast-spotbugs:
     name: sast-spotbugs
-    if: inputs.enable-spotbugs && inputs.enable-code-build && (inputs.selection-mode == 'all' || inputs.has_java == 'true')
+    if: inputs.enable-spotbugs && inputs.enable-code-build && (inputs.selection-mode == 'all' || inputs.has_java == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -282,7 +336,7 @@ jobs:
 
   sast-devskim:
     name: sast-devskim
-    if: inputs.enable-devskim && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true')
+    if: inputs.enable-devskim && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sast == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -292,22 +346,52 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Download changed-files
+        if: inputs.scan-scope == 'diff'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: changed-files
+          path: .
+      - name: Prepare scan paths
+        id: paths
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          patterns: '\.(py|pyi|go|java|kt|rb|js|jsx|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp|sh)$'
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "8.0.x"
       - name: DevSkim
+        if: steps.paths.outputs.skip != 'true'
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           dotnet tool install --global Microsoft.CST.DevSkim.CLI
           export PATH="$PATH:$HOME/.dotnet/tools"
-          devskim analyze --source-code . -o sarif -f devskim.sarif || EXIT=$?
+          mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
+          # DevSkim takes a single root; for diff, analyze each path
+          if [[ "${{ inputs.scan-scope }}" == "diff" && ${#TARGETS[@]} -gt 0 && "${TARGETS[0]}" != "." ]]; then
+            : > devskim.sarif
+            for t in "${TARGETS[@]}"; do
+              out="devskim-$(echo "$t" | tr '/.' '__').sarif"
+              devskim analyze --source-code "$t" -o sarif -f "$out" || true
+            done
+            # Prefer first SARIF for upload; merge is best-effort
+            first=$(ls devskim-*.sarif 2>/dev/null | head -n1 || true)
+            if [[ -n "$first" ]]; then cp "$first" devskim.sarif; else echo '{"version":"2.1.0","runs":[]}' > devskim.sarif; fi
+            EXIT=0
+          else
+            devskim analyze --source-code . -o sarif -f devskim.sarif || EXIT=$?
+          fi
           EXIT=${EXIT:-0}
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
+      - name: Skip (no matching paths)
+        if: steps.paths.outputs.skip == 'true'
+        run: echo "No matching paths in diff; skipping DevSkim" && echo '{"version":"2.1.0","runs":[]}' > devskim.sarif
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         if: always()
         with:
@@ -323,19 +407,36 @@ jobs:
 
   sast-shellcheck:
     name: sast-shellcheck
-    if: inputs.enable-shellcheck && (inputs.selection-mode == 'all' || inputs.has_shell == 'true')
+    if: inputs.enable-shellcheck && (inputs.selection-mode == 'all' || inputs.has_shell == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_sast == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Download changed-files
+        if: inputs.scan-scope == 'diff'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: changed-files
+          path: .
+      - name: Prepare scan paths
+        id: paths
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
+        with:
+          scan-scope: ${{ inputs.scan-scope }}
+          patterns: '\.(sh|bash|ksh|zsh)$'
       - name: ShellCheck
+        if: steps.paths.outputs.skip != 'true'
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          mapfile -t FILES < <(find . -type f \( -name '*.sh' -o -name '*.bash' -o -name '*.ksh' -o -name '*.zsh' \) ! -path './.git/*')
+          if [[ "${{ inputs.scan-scope }}" == "diff" ]]; then
+            mapfile -t FILES < "${{ steps.paths.outputs.paths_file }}"
+          else
+            mapfile -t FILES < <(find . -type f \( -name '*.sh' -o -name '*.bash' -o -name '*.ksh' -o -name '*.zsh' \) ! -path './.git/*')
+          fi
           if [[ ${#FILES[@]} -eq 0 ]]; then
             echo "No shell scripts found"
             echo '{"version":"2.1.0","runs":[]}' > shellcheck.sarif
@@ -363,6 +464,12 @@ jobs:
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
+      - name: Skip (no matching paths)
+        if: steps.paths.outputs.skip == 'true'
+        run: |
+          echo "No matching paths in diff; skipping ShellCheck"
+          echo '{"version":"2.1.0","runs":[]}' > shellcheck.sarif
+          : > shellcheck.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

@@ -1,0 +1,105 @@
+name: Prepare scan paths from diff
+description: Download changed-files artifact and filter by regex; set skip when empty in diff mode
+inputs:
+  scan-scope:
+    description: Resolved scope (diff or full)
+    required: true
+  patterns:
+    description: Space-separated extended regexes to match (empty = all changed files)
+    required: false
+    default: ""
+  changed-files-path:
+    description: Path to write/read changed-files.txt
+    required: false
+    default: changed-files.txt
+outputs:
+  skip:
+    description: true when diff mode and no matching paths
+    value: ${{ steps.prep.outputs.skip }}
+  path_args:
+    description: Space-separated quoted paths for CLI (or . in full mode)
+    value: ${{ steps.prep.outputs.path_args }}
+  path_count:
+    description: Number of matching paths
+    value: ${{ steps.prep.outputs.path_count }}
+  paths_file:
+    description: File containing matching paths
+    value: ${{ steps.prep.outputs.paths_file }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare
+      id: prep
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        SCAN_SCOPE: ${{ inputs.scan-scope }}
+        PATTERNS: ${{ inputs.patterns }}
+        CHANGED_FILES_PATH: ${{ inputs.changed-files-path }}
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        PATHS_FILE="scan-paths.txt"
+        : >"$PATHS_FILE"
+
+        if [[ "$SCAN_SCOPE" != "diff" ]]; then
+          echo "skip=false" >>"$GITHUB_OUTPUT"
+          echo "path_args=." >>"$GITHUB_OUTPUT"
+          echo "path_count=0" >>"$GITHUB_OUTPUT"
+          echo "paths_file=$PATHS_FILE" >>"$GITHUB_OUTPUT"
+          echo "." >"$PATHS_FILE"
+          exit 0
+        fi
+
+        # Artifact may extract as changed-files.txt or nested
+        SRC="$CHANGED_FILES_PATH"
+        if [[ ! -f "$SRC" ]]; then
+          if [[ -f changed-files/changed-files.txt ]]; then
+            SRC=changed-files/changed-files.txt
+          elif [[ -f changed-files.txt ]]; then
+            SRC=changed-files.txt
+          else
+            echo "No changed-files list found; skip"
+            echo "skip=true" >>"$GITHUB_OUTPUT"
+            echo "path_args=" >>"$GITHUB_OUTPUT"
+            echo "path_count=0" >>"$GITHUB_OUTPUT"
+            echo "paths_file=$PATHS_FILE" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+        fi
+
+        if [[ -n "${PATTERNS// }" ]]; then
+          # shellcheck disable=SC2086
+          bash "${REPO_ROOT}/scripts/filter-changed-files.sh" "$SRC" $PATTERNS >"$PATHS_FILE"
+        else
+          cp "$SRC" "$PATHS_FILE"
+        fi
+
+        # Drop missing paths
+        TMP=$(mktemp)
+        while IFS= read -r p; do
+          [[ -z "$p" ]] && continue
+          [[ -e "$p" || -L "$p" ]] && printf '%s\n' "$p"
+        done <"$PATHS_FILE" >"$TMP"
+        mv "$TMP" "$PATHS_FILE"
+
+        COUNT=$(grep -c . "$PATHS_FILE" || true)
+        if [[ "$COUNT" -eq 0 ]]; then
+          echo "skip=true" >>"$GITHUB_OUTPUT"
+          echo "path_args=" >>"$GITHUB_OUTPUT"
+          echo "path_count=0" >>"$GITHUB_OUTPUT"
+          echo "paths_file=$PATHS_FILE" >>"$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Build argv-safe space-separated list
+        ARGS=""
+        while IFS= read -r p; do
+          [[ -z "$p" ]] && continue
+          ARGS+=" $(printf '%q' "$p")"
+        done <"$PATHS_FILE"
+        echo "skip=false" >>"$GITHUB_OUTPUT"
+        echo "path_args=${ARGS# }" >>"$GITHUB_OUTPUT"
+        echo "path_count=$COUNT" >>"$GITHUB_OUTPUT"
+        echo "paths_file=$PATHS_FILE" >>"$GITHUB_OUTPUT"
+        echo "Prepared $COUNT path(s) for scan"

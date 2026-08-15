@@ -41,9 +41,10 @@ jobs:
     uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@SHA
     with:
       results-publish-mode: pull-request
+      scan-scope: full   # scheduled runs are not PRs; force a full-tree scan
 ```
 
-Keep PR/push workflows on `results-publish-mode: none` so feature PRs are not filled with report commits.
+Keep PR/push workflows on `results-publish-mode: none` so feature PRs are not filled with report commits. PR workflows default to `scan-scope: auto` (diff-only); scheduled templates should set `scan-scope: full`.
 
 ## Aggregation layout
 

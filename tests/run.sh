@@ -193,6 +193,63 @@ assert_eq "dedup merges tools" "dedup_ok" "$DEDUP_STATUS"
 rm -rf "$ART" "$DEST_ROOT"
 
 echo
+echo "== resolve-scan-scope / filter-changed-files =="
+
+SCOPE_TMP="$(mktemp -d)"
+pushd "$SCOPE_TMP" >/dev/null
+git init -q
+git config user.email "test@example.com"
+git config user.name "test"
+mkdir -p python .github/workflows docker
+echo 'print(1)' > python/app.py
+echo 'Django==1' > python/requirements.txt
+echo 'FROM scratch' > docker/Dockerfile
+echo 'name: x' > .github/workflows/ci.yml
+echo '# readme' > README.md
+git add -A && git commit -qm base
+BASE=$(git rev-parse HEAD)
+
+echo 'print(2)' >> python/app.py
+git add -A && git commit -qm py-only
+HEAD_PY=$(git rev-parse HEAD)
+
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_PY" "$SCOPE_TMP/out-py" >/dev/null
+assert_eq "py-only scan_scope" "diff" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_dockerfile" "false" "$(grep '^scope_dockerfile=' /tmp/gh-scope-out | cut -d= -f2)"
+FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/out-py/changed-files.txt" '\.py$')
+assert_eq "filter py" "python/app.py" "$FILTERED"
+
+git checkout -q "$BASE"
+echo 'extra' >> README.md
+git add -A && git commit -qm readme-only
+HEAD_README=$(git rev-parse HEAD)
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_README" "$SCOPE_TMP/out-readme" >/dev/null
+assert_eq "readme scope_sast" "false" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "readme scope_secrets" "true" "$(grep '^scope_secrets=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "readme scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
+
+git checkout -q "$BASE"
+echo 'Flask==1' >> python/requirements.txt
+git add -A && git commit -qm reqs
+HEAD_REQ=$(git rev-parse HEAD)
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "$BASE" "$HEAD_REQ" "$SCOPE_TMP/out-reqs" >/dev/null
+assert_eq "reqs scope_python_manifest" "true" "$(grep '^scope_python_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "reqs scope_sca" "true" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
+
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out "$ROOT/scripts/resolve-scan-scope.sh" auto push "" "" "$SCOPE_TMP/out-full" >/dev/null
+assert_eq "push auto is full" "full" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "full scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+
+popd >/dev/null
+rm -rf "$SCOPE_TMP"
+
+echo
 echo "== action pins =="
 if "$ROOT/scripts/check-action-pins.sh"; then
   echo "  PASS  action pins"
@@ -278,6 +335,22 @@ if grep -q 'results-publish-mode' templates/security-all-scheduled.yml; then
   PASS=$((PASS + 1))
 else
   echo "  FAIL  scheduled template missing publish mode"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'scan-scope' .github/workflows/reusable-security-full.yml; then
+  echo "  PASS  full suite has scan-scope"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite missing scan-scope"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'scan-scope: full' templates/security-all-scheduled.yml; then
+  echo "  PASS  scheduled template forces full scan-scope"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scheduled template missing scan-scope: full"
   FAIL=$((FAIL + 1))
 fi
 

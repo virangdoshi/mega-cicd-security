@@ -16,6 +16,7 @@ jobs:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # scan-scope: auto  # default — diff on PRs, full on push/dispatch
       # enable-image-build / enable-code-build only on trusted refs
 ```
 
@@ -58,6 +59,24 @@ Forks of private libraries do **not** inherit reusable-workflow access — point
 - `all` — run every enabled tool even if files are missing (jobs may no-op internally).
 
 Disable a single tool with the corresponding `enable-<tool>: false` input on the category reusable.
+
+## Scan scope (diff vs full)
+
+`reusable-security-full` input `scan-scope`:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | `diff` on `pull_request`, `full` on push / `workflow_dispatch` |
+| `diff` | Only consider files changed vs the PR base (or skip tools that cannot path-scope) |
+| `full` | Scan the whole checkout |
+
+In **diff** mode:
+
+- Tools that accept path lists (Semgrep, Bandit, detect-secrets, etc.) scan only matching changed files.
+- Tools that cannot path-scope (CodeQL, Gosec, Scorecard, image scanners, …) are **skipped** unless the diff gives them a reason to run (e.g. lockfile → SCA, Dockerfile → container, `.github/workflows/**` → meta/pinact).
+- SCA/SBOM still run against the repo/manifests when a relevant lockfile/manifest is in the diff (not path-filtered).
+
+**Category-only** reusable workflows (`reusable-sast.yml`, etc.) default `scan-scope` to `full`. Diff gating is wired through `reusable-security-full` (resolve job + artifact). Prefer the full suite for PR diff behavior, or pass `scan-scope` / changed-file inputs yourself when calling categories standalone.
 
 ## Org placement
 

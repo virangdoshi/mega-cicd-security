@@ -24,6 +24,7 @@ jobs:
       fail-on-severity: HIGH
       results-publish-mode: pull-request
       results-branch: security-results
+      scan-scope: full
       # Trusted schedule context — builds OK if you need image/compile scans:
       # enable-image-build: true
       # enable-code-build: true
