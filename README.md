@@ -61,14 +61,14 @@ concurrency:
 
 jobs:
   security:
-    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-security-full.yml@v1.0.0
+    uses: YOUR_ORG/mega-cicd-security/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48 # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
 ```
 
-Prefer a **release tag** (e.g. `@v1.0.0`) or **commit SHA** instead of `@main` in production.
+Prefer a **commit SHA** (or immutable release tag) instead of `@main` in production. Third-party Actions inside this library are already SHA-pinned.
 
 **Or copy a template:**
 
