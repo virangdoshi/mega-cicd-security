@@ -20,6 +20,7 @@ Most teams bolt on one scanner at a time and end up with uneven coverage. This r
 |------|-----|
 | Broad coverage | Many OSS tools per category (duplicates welcome) |
 | Low noise on empty ecosystems | Auto-detect languages/files; skip what does not apply |
+| Diff-aware PRs | Default `scan-scope: auto` — scan changed files on PRs, full tree on push |
 | Easy org rollout | Call once via `workflow_call`, or copy thin templates |
 | Useful output | SARIF → Code Scanning, artifacts always, optional git PR/branch |
 | Supply-chain hygiene | Third-party Actions pinned by commit SHA |
@@ -83,7 +84,7 @@ cp templates/security-all.yml my-app/.github/workflows/security.yml
 
 App repo → **Settings → Code security → Code scanning**, so SARIF uploads show under the Security tab.
 
-On each run: detect ecosystems → parallel category scanners → SARIF + artifacts → optional git publish.
+On each run: detect ecosystems → resolve scan scope (diff vs full) → parallel category scanners → SARIF + artifacts → optional git publish.
 
 ---
 
@@ -156,6 +157,7 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | Input | Default | Meaning |
 |-------|---------|---------|
 | `selection-mode` | `detected` | `detected` = skip tools for missing ecosystems; `all` = force enabled tools |
+| `scan-scope` | `auto` | `auto` = diff on `pull_request`, full on push/`workflow_dispatch`; or force `diff` / `full` |
 | `fail-on-severity` | `HIGH` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` |
 | `results-publish-mode` | `none` | `none` \| `branch` \| `pull-request` |
 | `image` / `dockerfile` | — | Container scans; builds Dockerfile when image empty |
@@ -163,6 +165,24 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | `enable-<tool>` | `true` | Per-tool toggles on each category workflow |
 
 `NONE` uploads findings but does not fail the job where soft-fail is supported. Overlap (e.g. Trivy + Grype + OSV) is expected — triage in Code Scanning, not in this library.
+
+### Scan scope (diff vs full)
+
+By default, **pull requests scan the diff**; **pushes and manual runs scan the whole checkout**.
+
+| `scan-scope` | Behavior |
+|--------------|----------|
+| `auto` (default) | `diff` on `pull_request`; `full` otherwise |
+| `diff` | Always use the PR/base…head changed-file set |
+| `full` | Always scan the full tree |
+
+In **diff** mode:
+
+- Path-aware tools (Semgrep, Bandit, ShellCheck, detect-secrets, …) only scan matching changed files.
+- Tools that cannot take a file list (CodeQL, Gosec, Scorecard, image scanners, …) are **skipped** unless the diff triggers them (e.g. lockfile → SCA, Dockerfile → container, `.github/workflows/**` → meta/pinact).
+- SCA/SBOM still analyze manifests/lockfiles when those files change (not path-filtered line-by-line).
+
+Force a full PR scan with `scan-scope: full`. More detail: [docs/adoption.md](docs/adoption.md#scan-scope-diff-vs-full).
 
 ### Ecosystem detection
 
@@ -247,8 +267,9 @@ More detail: [docs/results.md](docs/results.md).
 |---------|--------------|-----|
 | SARIF missing in Security tab | Code Scanning off / private without GHAS | Enable Code Scanning; check upload logs |
 | `uses:` cannot access workflow | Private library without access | Grant org Actions access to the library |
-| Too many jobs skipped | `detected` + no manifests | Use `all`, or add language/IaC files |
-| Container jobs skipped | No Dockerfile / empty `image` | Pass `image` or add a Dockerfile |
+| Silent `startup_failure` | Caller permissions below full-suite ceiling | Grant `contents: write` + `pull-requests: write` + `security-events: write` |
+| Too many jobs skipped | `detected` + no manifests, or `diff` + unrelated files | Use `all`, `scan-scope: full`, or change relevant files |
+| Container jobs skipped | No Dockerfile / empty `image` / diff without Dockerfile | Pass `image`, add a Dockerfile, or use `scan-scope: full` |
 | Cosign/SLSA skipped | Missing identity / artifact inputs | Set the inputs above |
 | Publish did nothing | `none` or missing write perms | Set mode + `contents`/`pull-requests: write` |
 | ClamAV slow | Freshclam + full tree | `enable-clamav: false` on malware workflow |
@@ -259,6 +280,7 @@ More detail: [docs/results.md](docs/results.md).
 
 ```bash
 ./scripts/detect-ecosystems.sh . /tmp/ecosystems.json
+./scripts/resolve-scan-scope.sh auto pull_request <base_sha> <head_sha> /tmp/scope-out
 ./tests/run.sh
 ```
 
@@ -282,7 +304,7 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 - Results publish excludes secret-scanner artifacts and only allows `security-results` branch names.
 - CI enforces Action pin hashes via [`scripts/check-action-pins.sh`](scripts/check-action-pins.sh) (run from `./tests/run.sh`).
 - Dependabot updates those SHAs in a **single weekly grouped PR**.
-- Grant callers least privilege; only add write permissions when publishing results.
+- Grant callers the full permission ceiling required by `reusable-security-full` (see Quick start); publish mode still needs write when enabled.
 - This suite finds issues — it does not replace threat modeling, review, or production monitoring.
 
 ---
