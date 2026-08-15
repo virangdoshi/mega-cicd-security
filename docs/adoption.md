@@ -19,7 +19,7 @@ jobs:
       # enable-image-build / enable-code-build only on trusted refs
 ```
 
-Prefer a **commit SHA** (not `@main`) for supply-chain hygiene. Grant `contents: write` + `pull-requests: write` only when publishing results. Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
+Prefer a **commit SHA** (not `@main`) for supply-chain hygiene. Caller workflows must grant the full permission ceiling below even when `results-publish-mode: none` (GitHub validates job scopes at startup). Category-only entrypoints live under `.github/workflows/reusable-*.yml`.
 
 ### Copy-paste templates
 
