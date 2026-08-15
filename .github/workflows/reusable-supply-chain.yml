@@ -123,13 +123,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
       - name: GuardDog
         run: |
           set -euo pipefail
-          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/guarddog.txt"
+          pip install --require-hashes -r "${{ steps.scankit.outputs.root }}/.github/pinned/guarddog.txt"
           mkdir -p guarddog-out
           if [[ -f requirements.txt ]]; then
             guarddog pypi scan requirements.txt --output-format json > guarddog-out/pypi.json || true
@@ -156,6 +159,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.23.x"
@@ -163,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sL "https://github.com/anchore/syft/releases/download/v1.27.1/syft_1.27.1_linux_amd64.tar.gz" -o syft.tgz
-          bash scripts/verify-sha256.sh syft.tgz c2cb5867a238baf41adf15f7e01e28cbd886378859eed81e52c080ca0346eefe
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" syft.tgz c2cb5867a238baf41adf15f7e01e28cbd886378859eed81e52c080ca0346eefe
           tar -xzf syft.tgz
           sudo install -m 0755 syft /usr/local/bin/syft
           syft dir:. -o cyclonedx-json=sbom.cdx.json
@@ -250,10 +256,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - name: Install slsa-verifier
         run: |
           curl -sL "https://github.com/slsa-framework/slsa-verifier/releases/download/v2.7.0/slsa-verifier-linux-amd64" -o slsa-verifier
-          bash scripts/verify-sha256.sh slsa-verifier 499befb675efcca9001afe6e5156891b91e71f9c07ab120a8943979f85cc82e6
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" slsa-verifier 499befb675efcca9001afe6e5156891b91e71f9c07ab120a8943979f85cc82e6
           chmod +x slsa-verifier
       - name: Verify
         env:

@@ -150,12 +150,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - name: Install Trivy
         run: |
           set -euo pipefail
           VERSION=0.74.0
           curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o trivy.tgz
-          bash scripts/verify-sha256.sh trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
           tar -xzf trivy.tgz
           sudo install -m 0755 trivy /usr/local/bin/trivy
       - name: Trivy filesystem
@@ -263,6 +266,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -271,7 +277,7 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          pip install --require-hashes -r "${GITHUB_WORKSPACE}/.github/pinned/pip-audit.txt"
+          pip install --require-hashes -r "${{ steps.scankit.outputs.root }}/.github/pinned/pip-audit.txt"
           if [[ -f requirements.txt ]]; then
             pip-audit -r requirements.txt -f json -o pip-audit.json || EXIT=$?
           elif [[ -f pyproject.toml ]]; then
@@ -363,13 +369,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - name: Install Rust + cargo-audit
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.21.2/cargo-audit-x86_64-unknown-linux-musl-v0.21.2.tgz" -o cargo-audit.tgz
-          bash scripts/verify-sha256.sh cargo-audit.tgz 422912aa851458bc9bf37a458b75890cb5a4e2a7e5216dcee7df91507fc594d9
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" cargo-audit.tgz 422912aa851458bc9bf37a458b75890cb5a4e2a7e5216dcee7df91507fc594d9
           tar -xzf cargo-audit.tgz
           sudo install -m 0755 cargo-audit-*/cargo-audit /usr/local/bin/cargo-audit
           if [[ -f Cargo.toml ]]; then
@@ -397,13 +406,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - name: cargo-deny
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           curl -sL "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz" -o cargo-deny.tgz
-          bash scripts/verify-sha256.sh cargo-deny.tgz 43c4a79c4b9fd1fcb3dddb305a1b4d8f7ac4a72accd61bb50a0b698789ca894c
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" cargo-deny.tgz 43c4a79c4b9fd1fcb3dddb305a1b4d8f7ac4a72accd61bb50a0b698789ca894c
           tar -xzf cargo-deny.tgz
           sudo install -m 0755 cargo-deny-*/cargo-deny /usr/local/bin/cargo-deny
           if [[ -f Cargo.toml ]]; then
@@ -462,13 +474,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve scankit root
+        id: scankit
+        uses: virangdoshi/scankit/.github/actions/scankit-root@c45b88150bdda27bdf295b0a11e1a4cf907d55b5
       - name: local-php-security-checker
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
           curl -sL "https://github.com/fabpot/local-php-security-checker/releases/download/v2.0.0/local-php-security-checker_2.0.0_linux_amd64" -o php-security-checker
-          bash scripts/verify-sha256.sh php-security-checker 96f5db138921c60e18a551221c7f93e787cccc7ed5953b80920b34d97af0ce10
+          bash "${{ steps.scankit.outputs.root }}/scripts/verify-sha256.sh" php-security-checker 96f5db138921c60e18a551221c7f93e787cccc7ed5953b80920b34d97af0ce10
           chmod +x php-security-checker
           if [[ -f composer.lock ]]; then
             ./php-security-checker --format=json > php-security.json || EXIT=$?

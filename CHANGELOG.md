@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Diff-scoped scanning** (`scan-scope: auto|diff|full`, default `auto`): PRs scan changed files; push/`workflow_dispatch` scan the full tree. Path-filterable tools use the diff; tools that cannot path-scope are skipped unless the diff triggers them (lockfile, Dockerfile, workflows, etc.).
-- Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`
+- Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scankit-root`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`
 - Anchore SBOM + Grype pipeline: `anchore/sbom-action` (Syft SPDX/CycloneDX) and `anchore/scan-action` Grype SBOM scan with SARIF → Code Scanning (`sbom-anchore-syft` / `sbom-anchore-grype`)
 
 ### Fixed
 
+- Cross-repo callers: resolve `.github/pinned/*` and `scripts/verify-sha256.sh` via new `scankit-root` composite action (`github.action_path`) instead of `GITHUB_WORKSPACE` (which is the caller checkout)
+- TruffleHog: replace broken `--only-verified=false` with `--results=verified,unknown`; honor `fail-on-severity: NONE` for Gitleaks/TruffleHog via `continue-on-error`
 - Restore `reusable-security-full` workflow-level permission ceiling (`contents`/`pull-requests`/`security-events: write`) so nested job scopes are valid for cross-repo callers (avoids silent `startup_failure`)
 
 ### Security
