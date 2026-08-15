@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Override transitive `lodash` to `4.18.1` in `.github/pinned/npm-api` (GHSA-f23m-r3pf-42rh / GHSA-r5fr-rjxr-66jc)
 - Replace remaining `curl|sh` / unpinned npm/cargo/rustup installs with SHA256-verified release binaries, `npm ci` lockfile (`.github/pinned/npm-api`), and hashed ScanCode requirements (Scorecard Pinned-Dependencies)
 - Bump Trivy installs to v0.74.0 and KICS to v2.1.20 (release assets + checksums)
 - Digest-pin test fixture `alpine:3.19`; pin `tests/run.sh` actionlint download
