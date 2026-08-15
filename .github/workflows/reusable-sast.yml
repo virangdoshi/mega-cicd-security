@@ -143,6 +143,8 @@ jobs:
           patterns: '\.(py|pyi|go|java|kt|kts|rb|js|jsx|mjs|cjs|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp)$'
       - name: Semgrep scan
         if: steps.paths.outputs.skip != 'true'
+        # Container jobs default to sh; mapfile/[[ need bash (available in semgrep image).
+        shell: bash
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
@@ -155,6 +157,7 @@ jobs:
           fi
       - name: Skip (no matching paths)
         if: steps.paths.outputs.skip == 'true'
+        shell: bash
         run: echo "No matching paths in diff; skipping Semgrep" && echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
       - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         if: always()

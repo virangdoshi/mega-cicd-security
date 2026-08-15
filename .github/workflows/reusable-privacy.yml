@@ -166,6 +166,8 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Semgrep privacy/security rules
+        # Container jobs default to sh; [[ / pipefail need bash.
+        shell: bash
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
