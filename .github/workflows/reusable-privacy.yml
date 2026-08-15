@@ -70,7 +70,10 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sfL https://raw.githubusercontent.com/Bearer/bearer/v1.46.0/contrib/install.sh | sh
+          curl -sL "https://github.com/Bearer/bearer/releases/download/v1.46.0/bearer_1.46.0_linux_amd64.tar.gz" -o bearer.tgz
+          bash scripts/verify-sha256.sh bearer.tgz ab3823519649834db74768af54b7ac08aa38d32286cb761c72693686427b1a1b
+          tar -xzf bearer.tgz
+          sudo install -m 0755 bearer /usr/local/bin/bearer
           mapfile -t TARGETS < "${{ steps.paths.outputs.paths_file }}"
           bearer scan "${TARGETS[@]}" --format sarif --output bearer.sarif || EXIT=$?
           EXIT=${EXIT:-0}

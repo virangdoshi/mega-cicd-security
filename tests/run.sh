@@ -269,13 +269,15 @@ case "$ARCH" in
   x86_64|amd64) ARCH=amd64 ;;
   arm64|aarch64) ARCH=arm64 ;;
 esac
-# Download latest actionlint release binary
-AL_URL=$(curl -fsSL https://api.github.com/repos/rhysd/actionlint/releases/latest \
-  | python3 -c "import sys,json,re; assets=json.load(sys.stdin).get('assets',[]);
-pat=re.compile(r'actionlint_.*_${OS}_${ARCH}\\.tar\\.gz$');
-print(next((a['browser_download_url'] for a in assets if pat.search(a['name'])), ''))")
-if [[ -n "$AL_URL" ]]; then
-  curl -fsSL "$AL_URL" | tar -xz -C "$(dirname "$ACTIONLINT_BIN")" actionlint
+# Pinned actionlint release
+AL_VERSION=1.7.7
+AL_TGZ="$(dirname "$ACTIONLINT_BIN")/actionlint.tgz"
+AL_URL="https://github.com/rhysd/actionlint/releases/download/v${AL_VERSION}/actionlint_${AL_VERSION}_${OS}_${ARCH}.tar.gz"
+if curl -fsSL "$AL_URL" -o "$AL_TGZ"; then
+  if [[ "$OS" == "linux" && "$ARCH" == "amd64" ]]; then
+    bash scripts/verify-sha256.sh "$AL_TGZ" 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+  fi
+  tar -xzf "$AL_TGZ" -C "$(dirname "$ACTIONLINT_BIN")" actionlint
   chmod +x "$ACTIONLINT_BIN"
   set +e
   "$ACTIONLINT_BIN" -color -shellcheck= -pyflakes= .github/workflows/*.yml

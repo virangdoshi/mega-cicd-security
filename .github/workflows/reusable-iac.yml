@@ -115,8 +115,11 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sL https://raw.githubusercontent.com/Checkmarx/kics/v2.1.3/install.sh | bash
-          export PATH="$HOME/.kics/bin:$PATH:/usr/local/bin"
+          VERSION=2.1.20
+          curl -sL "https://github.com/Checkmarx/kics/releases/download/v${VERSION}/kics_${VERSION}_linux_amd64.tar.gz" -o kics.tgz
+          bash scripts/verify-sha256.sh kics.tgz 8a5aa375ccfdc0ddd1114eddf1f9638ad7f6122e98d12a592207509dbe6d81f8
+          tar -xzf kics.tgz
+          sudo install -m 0755 kics /usr/local/bin/kics
           kics scan -p . -o kics --report-formats sarif,json || EXIT=$?
           EXIT=${EXIT:-0}
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
@@ -147,7 +150,14 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/v0.66.0/contrib/install.sh | sh -s -- -b /usr/local/bin v0.66.0
+        run: |
+          set -euo pipefail
+          VERSION=0.74.0
+          curl -sL "https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz" -o trivy.tgz
+          bash scripts/verify-sha256.sh trivy.tgz 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+          tar -xzf trivy.tgz
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+
       - name: Trivy config
         env:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
@@ -212,7 +222,10 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sL https://raw.githubusercontent.com/open-policy-agent/conftest/v0.56.0/install.sh | bash -s -- -b /usr/local/bin
+          curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz" -o conftest.tgz
+          bash scripts/verify-sha256.sh conftest.tgz 620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5
+          tar -xzf conftest.tgz
+          sudo install -m 0755 conftest /usr/local/bin/conftest
           conftest test . -p "$CONFTEST_POLICY_PATH" --output json | tee conftest.json || EXIT=$?
           EXIT=${EXIT:-0}
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
@@ -327,8 +340,9 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -s https://raw.githubusercontent.com/kubescape/kubescape/v3.0.20/install.sh | /bin/bash
-          export PATH="$HOME/.kubescape:$PATH:/usr/local/bin"
+          curl -sL "https://github.com/kubescape/kubescape/releases/download/v3.0.20/kubescape-ubuntu-latest" -o kubescape
+          bash scripts/verify-sha256.sh kubescape dbd61f8e57092ada559f7e8d6fed9f6d928eca03c14c2fbebbbc656860ea432e
+          sudo install -m 0755 kubescape /usr/local/bin/kubescape
           # Scan local manifests (frameworks: nsa, mitre, etc.)
           kubescape scan . --format json --output kubescape.json || EXIT=$?
           EXIT=${EXIT:-0}
@@ -355,20 +369,11 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          curl -sL "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-x86_64-ubuntu-latest.tar.gz" -o cfn-guard.tgz || true
-          if [[ ! -f cfn-guard.tgz ]] || [[ ! -s cfn-guard.tgz ]]; then
-            cargo install cfn-guard --version 3.1.1 --locked 2>/dev/null || {
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.85.0
-              # shellcheck disable=SC1091
-              source "$HOME/.cargo/env"
-              cargo install cfn-guard --version 3.1.1 --locked
-            }
-            export PATH="$HOME/.cargo/bin:$PATH"
-          else
-            tar -xzf cfn-guard.tgz
-            export PATH="$PWD:$PATH"
-            find . -name 'cfn-guard' -type f -executable | head -1 | xargs -I{} cp {} /usr/local/bin/cfn-guard || true
-          fi
+          curl -sL "https://github.com/aws-cloudformation/cloudformation-guard/releases/download/3.1.1/cfn-guard-v3-x86_64-ubuntu-latest.tar.gz" -o cfn-guard.tgz
+          bash scripts/verify-sha256.sh cfn-guard.tgz 68869b3600c62969e16242f6b06d591dcc548728850423ffbe6bfb945e9545a8
+          tar -xzf cfn-guard.tgz
+          CFN_BIN="$(find . -name 'cfn-guard' -type f -executable | head -1)"
+          sudo install -m 0755 "$CFN_BIN" /usr/local/bin/cfn-guard
           mapfile -t TEMPLATES < <(find . -type f \( -iname '*template*.yml' -o -iname '*template*.yaml' -o -iname '*template*.json' -o -name 'cdk.out/**' \) ! -path './.git/*' | head -n 50)
           # Broader CFN cue files
           if [[ ${#TEMPLATES[@]} -eq 0 ]]; then

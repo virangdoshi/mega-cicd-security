@@ -162,9 +162,12 @@ jobs:
       - name: Generate SBOM then score
         run: |
           set -euo pipefail
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/v1.27.1/install.sh | sh -s -- -b /usr/local/bin
+          curl -sL "https://github.com/anchore/syft/releases/download/v1.27.1/syft_1.27.1_linux_amd64.tar.gz" -o syft.tgz
+          bash scripts/verify-sha256.sh syft.tgz c2cb5867a238baf41adf15f7e01e28cbd886378859eed81e52c080ca0346eefe
+          tar -xzf syft.tgz
+          sudo install -m 0755 syft /usr/local/bin/syft
           syft dir:. -o cyclonedx-json=sbom.cdx.json
-          go install github.com/interlynk-io/sbomqs@v0.2.0
+          go install github.com/interlynk-io/sbomqs@535bcec4bb80a2624a088d9ca1a23160f2ab8750  # v0.2.0
           export PATH="$(go env GOPATH)/bin:$PATH"
           sbomqs score sbom.cdx.json | tee sbomqs.txt || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -192,7 +195,7 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          go install github.com/suzuki-shunsuke/pinact/cmd/pinact@v1.1.0
+          go install github.com/suzuki-shunsuke/pinact/cmd/pinact@175ef6468b3ff93c52f4194670b5d79e118c7299  # v1.1.0
           pinact run --check || EXIT=$?
           EXIT=${EXIT:-0}
           pinact run --check 2>&1 | tee pinact.txt || true
@@ -222,7 +225,7 @@ jobs:
           FAIL_ON_SEVERITY: ${{ inputs.fail-on-severity }}
         run: |
           set -euo pipefail
-          go install github.com/sethvargo/ratchet@v0.11.4
+          go install github.com/sethvargo/ratchet@8b4ca256dbed184350608a3023620f267f0a5253  # v0.11.4
           mapfile -t WFS < <(find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null || true)
           if [[ ${#WFS[@]} -eq 0 ]]; then
             echo "No workflows"; echo ok > ratchet.txt; exit 0
