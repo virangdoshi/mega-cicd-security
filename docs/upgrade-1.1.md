@@ -15,10 +15,10 @@ Bump your caller pin to the [v1.1.0](https://github.com/virangdoshi/scankit/rele
 
 ```yaml
 # before (example 1.0 pin)
-uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@<old-sha>
+uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@5c116447f13eea8bb8c9ee254464ce0f981eda48
 
-# after — use the SHA printed on the v1.1.0 release page
-uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@<v1.1.0-sha>
+# after — v1.1.0
+uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@3cedcb4830bdaf09c99bb543ce59a747b3063885
 ```
 
 Copy-paste starters live under [`templates/`](../templates/).
