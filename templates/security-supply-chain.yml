@@ -26,4 +26,6 @@ jobs:
     with:
       selection-mode: detected
       fail-on-severity: HIGH
+      # scan-scope defaults to full for category-only entrypoints;
+      # use reusable-security-full for PR diff scoping (scan-scope: auto).
       # Set enable-*: false to disable individual tools in the reusable workflow.

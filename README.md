@@ -6,7 +6,7 @@
 
 **Open-source security scanning for GitHub Actions — kitchen-sink coverage, ecosystem-aware, org-ready.**
 
-Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files.
+Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files. On pull requests, `scan-scope: auto` further limits scans to the changed-file diff.
 
 [Scanner inventory](docs/scanners.md) · [Org adoption](docs/adoption.md) · [Results publishing](docs/results.md) · [Templates](templates/)
 
@@ -223,10 +223,11 @@ Cosign verify and slsa-verifier **skip** when required inputs are empty.
 
 ### Permissions
 
-| Capability | `contents` | `security-events` | `actions` | `id-token` | `pull-requests` | `packages` |
-|------------|------------|-------------------|-----------|------------|-----------------|------------|
-| Scan + SARIF | read | write | read | write (Scorecard) | read (dep review) | read (images) |
-| Publish results PR/branch | **write** | write | read | write | **write** | read |
+Callers of `reusable-security-full` must grant the **workflow ceiling** (GitHub validates this at startup even when publish mode is `none`):
+
+| `contents` | `pull-requests` | `security-events` | `actions` | `id-token` | `packages` |
+|------------|-----------------|-------------------|-----------|------------|------------|
+| **write** | **write** | **write** | read | write (Scorecard) | read |
 
 Private library repos need org Actions access so app repos can `uses:` the workflows.
 
@@ -290,8 +291,8 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 
 | Doc | Description |
 |-----|-------------|
-| [docs/scanners.md](docs/scanners.md) | Full tool inventory |
-| [docs/adoption.md](docs/adoption.md) | Org rollout notes |
+| [docs/scanners.md](docs/scanners.md) | Full tool inventory + diff-mode behavior |
+| [docs/adoption.md](docs/adoption.md) | Org rollout, permissions ceiling, scan-scope |
 | [docs/results.md](docs/results.md) | Publish modes & schedules |
 
 ---

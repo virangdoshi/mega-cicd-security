@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Diff-scoped scanning** (`scan-scope: auto|diff|full`, default `auto`): PRs scan changed files; push/`workflow_dispatch` scan the full tree. Path-filterable tools use the diff; tools that cannot path-scope are skipped unless the diff triggers them (lockfile, Dockerfile, workflows, etc.).
+- Composite actions / scripts: `resolve-scan-scope`, `prepare-scan-paths`, `scripts/resolve-scan-scope.sh`, `scripts/filter-changed-files.sh`
 - Anchore SBOM + Grype pipeline: `anchore/sbom-action` (Syft SPDX/CycloneDX) and `anchore/scan-action` Grype SBOM scan with SARIF → Code Scanning (`sbom-anchore-syft` / `sbom-anchore-grype`)
+
+### Fixed
+
+- Restore `reusable-security-full` workflow-level permission ceiling (`contents`/`pull-requests`/`security-events: write`) so nested job scopes are valid for cross-repo callers (avoids silent `startup_failure`)
 
 ### Security
 
@@ -17,12 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin pip installs with `--require-hashes` (`.github/pinned/*.txt`)
 - Verify release binary SHA256 (dockle, dive, slsa-verifier, php-security-checker)
 - Pin go tools to commit SHA / release tags (no `@latest`)
-- Move `security-events: write` to job-level; keep workflow defaults read-only
-- Bump test fixture `requests` to 2.33.0 (clears Scorecard Vulnerabilities false positive)
 - Eliminate `${{ inputs.* }}` interpolation inside `run:` shells (pass via `env:`)
 - Default-disable Docker builds and CodeQL/SpotBugs compiles on untrusted code (`enable-image-build` / `enable-code-build`)
 - Exclude secret-scanner artifacts from results aggregation/publish; allowlist `security-results*` publish branches
-- Full suite requests read-only contents by default; publish job elevates only when publishing
 - Pin installer scripts, npm/pip/go tools, Semgrep image tags, and release binaries (no `main`/`latest` for scanners)
 - Scorecard `publish_results` defaults to false
 - Harden `detect-ecosystems.sh` filename handling (`find -print0` / `xargs -0`)
@@ -31,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Dependabot now groups GitHub Actions updates into a **single weekly PR** (was one PR per action)
 - Enforce **commit-SHA pins** for all remote Actions (`scripts/check-action-pins.sh`); templates pin to a SHA instead of `@main`
-- Scan-only templates drop `pull-requests: write`
+- Full-suite callers must grant `contents: write` + `pull-requests: write` + `security-events: write` (ceiling), even when `results-publish-mode: none`
+- Document `scan-scope` in README, adoption, scanners, and templates
 
 ## [1.0.0] — 2026-08-13
 

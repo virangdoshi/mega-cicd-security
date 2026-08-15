@@ -35,6 +35,7 @@ Out of scope:
 
 ## Hardening expectations for callers
 
-- Grant least-privilege `permissions` (scan-only vs publish)
+- For `reusable-security-full`, grant the documented permission ceiling (`contents`/`pull-requests`/`security-events: write`) — required even when not publishing
 - Keep `enable-image-build` / `enable-code-build` off for untrusted `pull_request` workflows
 - Do not publish secret-scanner raw artifacts into git
+- Prefer `scan-scope: auto` on PR workflows; use `scan-scope: full` for scheduled/baseline audits

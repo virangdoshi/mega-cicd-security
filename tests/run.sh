@@ -344,6 +344,14 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+if grep -q 'scan-scope: full' templates/security-all-scheduled.yml; then
+  echo "  PASS  scheduled template forces full scan-scope"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scheduled template missing scan-scope: full"
+  FAIL=$((FAIL + 1))
+fi
+
 echo
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -ne 0 ]]; then
