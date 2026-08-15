@@ -81,19 +81,25 @@ fi
 if found -name 'Chart.yaml' -o -name 'Chart.yml'; then
   has_k8s=true
 fi
-# Heuristic: Kubernetes manifests
-if find . -type f \( -name '*.yaml' -o -name '*.yml' \) \
-  ! -path './.git/*' ! -path './node_modules/*' 2>/dev/null \
-  | head -n 200 \
-  | xargs grep -l -E '^apiVersion:' 2>/dev/null \
+# Heuristic: Kubernetes manifests (null-delimited; sample first 200 files)
+k8s_sample=()
+while IFS= read -r -d '' f && ((${#k8s_sample[@]} < 200)); do
+  k8s_sample+=("$f")
+done < <(find . -type f \( -name '*.yaml' -o -name '*.yml' \) \
+  ! -path './.git/*' ! -path './node_modules/*' -print0 2>/dev/null)
+if ((${#k8s_sample[@]})) && printf '%s\0' "${k8s_sample[@]}" \
+  | xargs -0 grep -l -E '^apiVersion:' 2>/dev/null \
   | head -n 1 | grep -q .; then
   has_k8s=true
 fi
-if found -name 'cdk.json' || find . -type f \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) \
-  ! -path './.git/*' 2>/dev/null \
-  | head -n 200 \
-  | xargs grep -l -Ei 'AWSTemplateFormatVersion|aws::cloudformation' 2>/dev/null \
-  | head -n 1 | grep -q .; then
+cfn_sample=()
+while IFS= read -r -d '' f && ((${#cfn_sample[@]} < 200)); do
+  cfn_sample+=("$f")
+done < <(find . -type f \( -name '*.yaml' -o -name '*.yml' -o -name '*.json' \) \
+  ! -path './.git/*' -print0 2>/dev/null)
+if found -name 'cdk.json' || { ((${#cfn_sample[@]})) && printf '%s\0' "${cfn_sample[@]}" \
+  | xargs -0 grep -l -Ei 'AWSTemplateFormatVersion|aws::cloudformation' 2>/dev/null \
+  | head -n 1 | grep -q .; }; then
   has_cloudformation=true
 fi
 if find . -type f \( \
@@ -112,10 +118,13 @@ fi
 if found -name '*.sh' -o -name '*.bash' -o -name '*.ksh' -o -name '*.zsh'; then
   has_shell=true
 fi
-# Shebang heuristic (limited sample for speed)
-if find . -type f ! -path './.git/*' ! -path './node_modules/*' 2>/dev/null \
-  | head -n 500 \
-  | xargs grep -l -E '^#!/bin/(sh|bash)|#!/usr/bin/env bash|^#!/usr/bin/env sh' 2>/dev/null \
+# Shebang heuristic (limited sample for speed; null-delimited)
+shebang_sample=()
+while IFS= read -r -d '' f && ((${#shebang_sample[@]} < 500)); do
+  shebang_sample+=("$f")
+done < <(find . -type f ! -path './.git/*' ! -path './node_modules/*' -print0 2>/dev/null)
+if ((${#shebang_sample[@]})) && printf '%s\0' "${shebang_sample[@]}" \
+  | xargs -0 grep -l -E '^#!/bin/(sh|bash)|#!/usr/bin/env bash|^#!/usr/bin/env sh' 2>/dev/null \
   | head -n 1 | grep -q .; then
   has_shell=true
 fi

@@ -66,11 +66,14 @@ runs:
     - name: Detect
       id: detect
       shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        INPUT_PATH: ${{ inputs.path }}
       run: |
         set -euo pipefail
         # action_path = <repo>/.github/actions/detect-ecosystems
-        REPO_ROOT="$(cd "${{ github.action_path }}/../../.." && pwd)"
-        bash "${REPO_ROOT}/scripts/detect-ecosystems.sh" "${{ inputs.path }}" ecosystems.json
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/detect-ecosystems.sh" "$INPUT_PATH" ecosystems.json
     - name: Upload ecosystems.json
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:

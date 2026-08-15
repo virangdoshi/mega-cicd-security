@@ -11,12 +11,13 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Least privilege for scan-only (no results publish).
+# Add contents:write + pull-requests:write only if you enable publish mode.
 permissions:
   contents: write
   security-events: write
   actions: read
   id-token: write
-  pull-requests: write
   packages: read
 
 concurrency:
@@ -30,6 +31,9 @@ jobs:
       selection-mode: detected
       fail-on-severity: HIGH
       results-publish-mode: none
+      # Docker/compile of PR code is off by default:
+      # enable-image-build: true
+      # enable-code-build: true
       # enable-scancode: false
       # image: ""
       # dockerfile: Dockerfile
