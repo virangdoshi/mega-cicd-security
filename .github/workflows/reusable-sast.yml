@@ -137,7 +137,7 @@ jobs:
           path: .
       - name: Prepare scan paths
         id: paths
-        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@28b09fb9792195856016dd519b67070bf6620b13
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
           scan-scope: ${{ inputs.scan-scope }}
           patterns: '\.(py|pyi|go|java|kt|kts|rb|js|jsx|mjs|cjs|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp)$'
@@ -185,7 +185,7 @@ jobs:
           path: .
       - name: Prepare scan paths
         id: paths
-        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@28b09fb9792195856016dd519b67070bf6620b13
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
           scan-scope: ${{ inputs.scan-scope }}
           patterns: '\.py$'
@@ -354,7 +354,7 @@ jobs:
           path: .
       - name: Prepare scan paths
         id: paths
-        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@28b09fb9792195856016dd519b67070bf6620b13
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
           scan-scope: ${{ inputs.scan-scope }}
           patterns: '\.(py|pyi|go|java|kt|rb|js|jsx|ts|tsx|php|cs|rs|c|cc|cpp|h|hpp|sh)$'
@@ -421,7 +421,7 @@ jobs:
           path: .
       - name: Prepare scan paths
         id: paths
-        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@28b09fb9792195856016dd519b67070bf6620b13
+        uses: virangdoshi/scankit/.github/actions/prepare-scan-paths@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
           scan-scope: ${{ inputs.scan-scope }}
           patterns: '\.(sh|bash|ksh|zsh)$'

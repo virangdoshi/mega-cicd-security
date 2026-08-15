@@ -147,7 +147,7 @@ jobs:
           fetch-depth: 0
       - name: Resolve scan scope
         id: scope
-        uses: virangdoshi/scankit/.github/actions/resolve-scan-scope@28b09fb9792195856016dd519b67070bf6620b13
+        uses: virangdoshi/scankit/.github/actions/resolve-scan-scope@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
           scan-scope: ${{ inputs.scan-scope }}
           event-name: ${{ github.event_name }}
