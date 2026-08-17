@@ -101,16 +101,16 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           languages: ${{ matrix.language }}
         continue-on-error: true
       - name: Autobuild
         if: inputs.enable-code-build
-        uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/autobuild@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         continue-on-error: true
       - name: Analyze
-        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           category: "/language:${{ matrix.language }}"
         continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
@@ -159,7 +159,7 @@ jobs:
         if: steps.paths.outputs.skip == 'true'
         shell: bash
         run: echo "No matching paths in diff; skipping Semgrep" && echo '{"version":"2.1.0","runs":[]}' > semgrep.sarif
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: semgrep.sarif
@@ -255,7 +255,7 @@ jobs:
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: gosec.sarif
@@ -296,7 +296,7 @@ jobs:
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: brakeman.sarif
@@ -398,7 +398,7 @@ jobs:
       - name: Skip (no matching paths)
         if: steps.paths.outputs.skip == 'true'
         run: echo "No matching paths in diff; skipping DevSkim" && echo '{"version":"2.1.0","runs":[]}' > devskim.sarif
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: devskim.sarif

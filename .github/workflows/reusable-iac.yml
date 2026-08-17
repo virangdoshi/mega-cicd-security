@@ -80,13 +80,13 @@ jobs:
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Checkov
-        uses: bridgecrewio/checkov-action@9b70310bcd306d11740313070b940167d6b23085 # v12.3115.0
+        uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12.3117.0
         with:
           directory: .
           output_format: sarif
           output_file_path: console,checkov.sarif
           soft_fail: ${{ inputs.fail-on-severity == 'NONE' }}
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: checkov.sarif
@@ -128,7 +128,7 @@ jobs:
           if [[ "$FAIL_ON_SEVERITY" != "NONE" && "$EXIT" -ne 0 ]]; then
             exit "$EXIT"
           fi
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: kics/results.sarif
@@ -174,7 +174,7 @@ jobs:
             ARGS+=(--exit-code 1 --severity-exit-code "$SEV")
           fi
           trivy "${ARGS[@]}" || { [[ "$SEV" == "NONE" ]] || exit 1; }
-      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         if: always()
         with:
           sarif_file: trivy-config.sarif
