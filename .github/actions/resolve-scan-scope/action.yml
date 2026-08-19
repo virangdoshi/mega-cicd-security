@@ -59,6 +59,10 @@ outputs:
     value: ${{ steps.resolve.outputs.scope_ruby_code }}
   scope_java_code:
     value: ${{ steps.resolve.outputs.scope_java_code }}
+  scope_python_code:
+    value: ${{ steps.resolve.outputs.scope_python_code }}
+  scope_js_code:
+    value: ${{ steps.resolve.outputs.scope_js_code }}
   scope_python_manifest:
     value: ${{ steps.resolve.outputs.scope_python_manifest }}
   scope_go_manifest:

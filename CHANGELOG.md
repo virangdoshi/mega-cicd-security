@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: architecture and category table include PR report; maintainer pin regeneration (`pip-compile --allow-unsafe`)
+- Diff mode: run whole-program SAST when matching language files change (CodeQL incremental analysis, Gosec, Brakeman, SpotBugs) instead of hard-skipping; govulncheck also runs on `.go` diffs. Scorecard remains PR-skipped (repo-level).
+
 ## [1.1.0] — 2026-08-15
 
 ### Added

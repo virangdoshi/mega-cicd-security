@@ -27,6 +27,9 @@ on:
       scope_go_manifest:
         type: string
         default: "true"
+      scope_go_code:
+        type: string
+        default: "true"
       scope_node_manifest:
         type: string
         default: "true"
@@ -300,7 +303,7 @@ jobs:
 
   sca-govulncheck:
     name: sca-govulncheck
-    if: inputs.enable-govulncheck && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_go_manifest == 'true')
+    if: inputs.enable-govulncheck && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_go_manifest == 'true' || inputs.scope_go_code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

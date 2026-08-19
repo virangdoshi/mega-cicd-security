@@ -70,16 +70,20 @@ Disable a single tool with the corresponding `enable-<tool>: false` input on the
 | Value | Behavior |
 |-------|----------|
 | `auto` (default) | `diff` on `pull_request`, `full` on push / `workflow_dispatch` |
-| `diff` | Only consider files changed vs the PR base (or skip tools that cannot path-scope) |
+| `diff` | Changed files; path-filter where possible; whole-program SAST if that language changed |
 | `full` | Scan the whole checkout |
 
 In **diff** mode:
 
-- Tools that accept path lists (Semgrep, Bandit, detect-secrets, etc.) scan only matching changed files.
-- Tools that cannot path-scope (CodeQL, Gosec, Scorecard, image scanners, …) are **skipped** unless the diff gives them a reason to run (e.g. lockfile → SCA, Dockerfile → container, `.github/workflows/**` → meta/pinact).
-- SCA/SBOM still run against the repo/manifests when a relevant lockfile/manifest is in the diff (not path-filtered).
+- Tools that accept path lists (Semgrep, Bandit, detect-secrets, Bearer, Spectral, …) scan only matching changed files.
+- Whole-program SAST **does** run when matching language files are in the diff: CodeQL (GitHub incremental/diff-informed analysis), Gosec, Brakeman, SpotBugs (still requires `enable-code-build`).
+- Scorecard is **always skipped** on diffs (repo-level OpenSSF checks; official cadence is default-branch push + schedule).
+- Other full-tree tools run only when the diff gives them a reason (lockfile → SCA/SBOM, Dockerfile → container, `.github/workflows/**` → meta/pinact, `.tf`/Helm/YAML → IaC).
+- SCA/SBOM still run against the repo/manifests when a relevant lockfile/manifest is in the diff (not path-filtered). govulncheck also runs when `.go` source changes.
 
 **Category-only** reusable workflows (`reusable-sast.yml`, etc.) default `scan-scope` to `full`. Diff gating is wired through `reusable-security-full` (resolve job + artifact). Prefer the full suite for PR diff behavior, or pass `scan-scope` / changed-file inputs yourself when calling categories standalone.
+
+Callers do not vendor `.github/pinned/` or `scripts/` — those resolve from the scankit action checkout via `scankit-root`.
 
 ## Org placement
 

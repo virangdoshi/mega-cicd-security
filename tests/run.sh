@@ -294,6 +294,9 @@ env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" 
   "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-py" >/dev/null
 assert_eq "py-only scan_scope" "diff" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_python_code" "true" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_go_code" "false" "$(grep '^scope_go_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_js_code" "false" "$(grep '^scope_js_code=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_dockerfile" "false" "$(grep '^scope_dockerfile=' /tmp/gh-scope-out | cut -d= -f2)"
 FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/out-py/changed-files.txt" '\.py$')
@@ -313,6 +316,21 @@ env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" 
   "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-reqs" >/dev/null
 assert_eq "reqs scope_python_manifest" "true" "$(grep '^scope_python_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "reqs scope_sca" "true" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "pkg/main.go"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-go" >/dev/null
+assert_eq "go-only scope_go_code" "true" "$(grep '^scope_go_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "go-only scope_go_manifest" "false" "$(grep '^scope_go_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "go-only scope_python_code" "false" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "web/app.ts"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-ts" >/dev/null
+assert_eq "ts-only scope_js_code" "true" "$(grep '^scope_js_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "ts-only scope_python_code" "false" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
 
 rm -f /tmp/gh-scope-out
 env GITHUB_OUTPUT=/tmp/gh-scope-out \
@@ -468,6 +486,38 @@ if grep -q 'pr-report-mode' .github/workflows/reusable-pr-report.yml; then
   PASS=$((PASS + 1))
 else
   echo "  FAIL  pr-report workflow missing"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A20 'name: sast-gosec' .github/workflows/reusable-sast.yml | grep -q 'scope_go_code'; then
+  echo "  PASS  gosec runs when Go is in the diff"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  gosec still hard-skips diff"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A25 'name: sast-codeql-langs' .github/workflows/reusable-sast.yml | grep -q 'scope_python_code'; then
+  echo "  PASS  codeql runs per-language on diff"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  codeql still hard-skips diff"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A8 'name: supply-scorecard' .github/workflows/reusable-supply-chain.yml | grep -q "scan-scope != 'diff')"; then
+  echo "  PASS  scorecard still skips pull-request diffs"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scorecard should remain skipped in diff mode"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A8 'name: sca-govulncheck' .github/workflows/reusable-sca.yml | grep -q 'scope_go_code'; then
+  echo "  PASS  govulncheck runs on Go source diffs"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  govulncheck missing scope_go_code trigger"
   FAIL=$((FAIL + 1))
 fi
 

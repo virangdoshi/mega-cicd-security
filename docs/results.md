@@ -18,7 +18,11 @@ Optionally persist a summary **into git** via `results-publish-mode` on `reusabl
 | `annotations` | Emit file/line `::error` / `::warning` / `::notice` annotations (capped per level) |
 | `both` (default) | Comment + annotations |
 
-Runs with `if: always()` after scanners so partial suites still report. Built from the same SARIF dedup as git publish (`findings-deduped.json`); secret-scanner raw artifacts stay excluded. Annotations appear on the PR Checks / Files views for the workflow run.
+Runs with `if: always()` after scanners so partial suites still report. Built from the same SARIF dedup as git publish (`findings-deduped.json`); secret-scanner raw artifacts stay excluded.
+
+Annotations are GitHub Actions workflow commands (`::error` / `::warning` / `::notice`) capped per level (10 each). They show on the PR Checks and Files views for that run — not as GitHub review comments. The sticky comment is upserted by HTML marker `<!-- scankit-pr-report -->` using `GITHUB_TOKEN` (`pull-requests: write`). Comment upsert is `continue-on-error` so a permissions miss does not fail the suite.
+
+`pr-report-mode` is a no-op on `push` / `workflow_dispatch` / `schedule`. Independent of `results-publish-mode`.
 
 ## Git publish modes
 

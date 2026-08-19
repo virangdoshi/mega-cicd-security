@@ -99,6 +99,8 @@ scope_supply=false
 scope_go_code=false
 scope_ruby_code=false
 scope_java_code=false
+scope_python_code=false
+scope_js_code=false
 scope_python_manifest=false
 scope_go_manifest=false
 scope_node_manifest=false
@@ -125,6 +127,8 @@ if [[ "$MODE" == "full" ]]; then
   scope_go_code=true
   scope_ruby_code=true
   scope_java_code=true
+  scope_python_code=true
+  scope_js_code=true
   scope_python_manifest=true
   scope_go_manifest=true
   scope_node_manifest=true
@@ -149,6 +153,8 @@ else
   if match_any '\.go$'; then scope_go_code=true; fi
   if match_any '\.rb$'; then scope_ruby_code=true; fi
   if match_any '\.(java|kt|kts)$'; then scope_java_code=true; fi
+  if match_any '\.(py|pyi)$'; then scope_python_code=true; fi
+  if match_any '\.(js|jsx|mjs|cjs|ts|tsx)$'; then scope_js_code=true; fi
 
   if match_any '(^|/)(requirements([^/]*)\.txt|Pipfile|Pipfile\.lock|pyproject\.toml|poetry\.lock|go\.mod|go\.sum|package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.toml|Cargo\.lock|Gemfile|Gemfile\.lock|composer\.json|composer\.lock|.*\.(csproj|fsproj|sln)|pom\.xml|build\.gradle(\.kts)?)$'; then
     scope_sca=true
@@ -218,6 +224,8 @@ flag scope_supply "$scope_supply"
 flag scope_go_code "$scope_go_code"
 flag scope_ruby_code "$scope_ruby_code"
 flag scope_java_code "$scope_java_code"
+flag scope_python_code "$scope_python_code"
+flag scope_js_code "$scope_js_code"
 flag scope_python_manifest "$scope_python_manifest"
 flag scope_go_manifest "$scope_go_manifest"
 flag scope_node_manifest "$scope_node_manifest"
@@ -248,6 +256,8 @@ cat >"$SCOPE_JSON" <<EOF
   "scope_go_code": $scope_go_code,
   "scope_ruby_code": $scope_ruby_code,
   "scope_java_code": $scope_java_code,
+  "scope_python_code": $scope_python_code,
+  "scope_js_code": $scope_js_code,
   "scope_python_manifest": $scope_python_manifest,
   "scope_go_manifest": $scope_go_manifest,
   "scope_node_manifest": $scope_node_manifest,
