@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- SCA **Dependency Review**: map scankit `fail-on-severity` (`CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`NONE`) onto the action’s `critical`/`high`/`moderate`/`low` scale (default `HIGH` was invalid and failed the job). `NONE` uses `warn-only`. Checkout + JSON artifacts. PR/`pull_request_target` only.
+
+### Changed
+
+- Docs: architecture and category table include PR report; maintainer pin regeneration (`pip-compile --allow-unsafe`)
+- Diff mode: run whole-program SAST when matching language files change (CodeQL incremental analysis, Gosec, Brakeman, SpotBugs) instead of hard-skipping; govulncheck also runs on `.go` diffs. Scorecard remains PR-skipped (repo-level).
+- Extract `scripts/prepare-scan-paths.sh` from the composite action so path filtering is unit-tested
+
+### Added
+
+- First-party [`.github/workflows/dependency-review.yml`](.github/workflows/dependency-review.yml): GitHub Dependency Review on this repo’s pull requests (`fail-on-severity: moderate`, PR comment)
+- Broader `./tests/run.sh` coverage: remaining detect-ecosystem fixtures, scan-scope flags (IaC/Docker/workflows/API/Java/Ruby), `verify-sha256`, `prepare-scan-paths`, `scankit-root` path math, all starter templates, actionlint on `templates/`
+
 ## [1.1.0] — 2026-08-15
 
 ### Added

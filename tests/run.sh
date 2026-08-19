@@ -81,7 +81,7 @@ run_detect() {
 }
 
 OUT=$(run_detect tests/fixtures/python-app)
-assert_flags "python" "$OUT" has_python true has_go false has_generic_code true
+assert_flags "python" "$OUT" has_python true has_go false has_java false has_generic_code true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/go-app)
@@ -89,7 +89,7 @@ assert_flags "go" "$OUT" has_go true has_python false
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/node-app)
-assert_flags "node" "$OUT" has_node true
+assert_flags "node" "$OUT" has_node true has_python false
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/docker-app)
@@ -97,7 +97,7 @@ assert_flags "docker" "$OUT" has_docker true
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/openapi-app)
-assert_flags "openapi" "$OUT" has_openapi true
+assert_flags "openapi" "$OUT" has_openapi true has_graphql false
 rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/shell-app)
@@ -110,6 +110,50 @@ rm -f "$OUT"
 
 OUT=$(run_detect tests/fixtures/actions-app)
 assert_flags "actions" "$OUT" has_actions true has_shell true
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/java-app)
+assert_flags "java" "$OUT" has_java true has_python false has_go false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/ruby-app)
+assert_flags "ruby" "$OUT" has_ruby true has_java false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/rust-app)
+assert_flags "rust" "$OUT" has_rust true has_node false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/php-app)
+assert_flags "php" "$OUT" has_php true has_dotnet false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/dotnet-app)
+assert_flags "dotnet" "$OUT" has_dotnet true has_php false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/terraform-app)
+assert_flags "terraform" "$OUT" has_terraform true has_k8s false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/k8s-app)
+assert_flags "k8s" "$OUT" has_k8s true has_terraform false has_cloudformation false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/cfn-app)
+assert_flags "cfn" "$OUT" has_cloudformation true has_k8s false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/graphql-app)
+assert_flags "graphql" "$OUT" has_graphql true has_openapi false
+rm -f "$OUT"
+
+OUT=$(run_detect tests/fixtures/binary-app)
+assert_flags "binary" "$OUT" has_binary true
+rm -f "$OUT"
+
+OUT=$(run_detect "$ROOT")
+assert_flags "self" "$OUT" has_actions true has_shell true has_generic_code true
 rm -f "$OUT"
 
 echo
@@ -277,6 +321,25 @@ else
   echo "  FAIL  pr annotation multi-tool title"
   FAIL=$((FAIL + 1))
 fi
+
+cat >"$PR_TMP/empty.json" <<'JSON'
+{"total_raw": 0, "total_unique": 0, "by_severity": {}, "by_tool": {}, "findings": []}
+JSON
+PR_OUT3="$("$ROOT/scripts/pr-report.sh" "$PR_TMP/empty.json" "$PR_TMP/c3.md" comment 2>&1)"
+if printf '%s\n' "$PR_OUT3" | grep -q '::error'; then
+  echo "  FAIL  comment mode should not emit annotations"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS  comment mode has no annotations"
+  PASS=$((PASS + 1))
+fi
+if grep -q 'Unique SARIF findings: \*\*0\*\*' "$PR_TMP/c3.md"; then
+  echo "  PASS  empty findings comment"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  empty findings comment"
+  FAIL=$((FAIL + 1))
+fi
 rm -rf "$PR_TMP"
 
 rm -rf "$ART" "$DEST_ROOT"
@@ -294,10 +357,27 @@ env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" 
   "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-py" >/dev/null
 assert_eq "py-only scan_scope" "diff" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_python_code" "true" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_go_code" "false" "$(grep '^scope_go_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "py-only scope_js_code" "false" "$(grep '^scope_js_code=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_sca" "false" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "py-only scope_dockerfile" "false" "$(grep '^scope_dockerfile=' /tmp/gh-scope-out | cut -d= -f2)"
 FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/out-py/changed-files.txt" '\.py$')
 assert_eq "filter py" "python/app.py" "$FILTERED"
+
+printf '%s\n' "python/app.py" "go/main.go" "Dockerfile" ".github/workflows/ci.yml" "missing.xyz" >"$SCOPE_TMP/mixed.txt"
+FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/mixed.txt" '\.py$' '\.go$')
+assert_eq "filter multi-regex" "$(printf '%s\n' python/app.py go/main.go)" "$FILTERED"
+FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/mixed.txt")
+assert_eq "filter no-regex copies list" "$(cat "$SCOPE_TMP/mixed.txt")" "$FILTERED"
+: >"$SCOPE_TMP/empty.txt"
+FILTERED=$("$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/empty.txt" '\.py$')
+assert_eq "filter empty list" "" "$FILTERED"
+set +e
+"$ROOT/scripts/filter-changed-files.sh" "$SCOPE_TMP/no-such.txt" '\.py$' >/dev/null 2>&1
+FILTER_RC=$?
+set -e
+assert_eq "filter missing list exits 1" "1" "$FILTER_RC"
 
 write_list "README.md"
 rm -f /tmp/gh-scope-out
@@ -313,6 +393,97 @@ env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" 
   "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-reqs" >/dev/null
 assert_eq "reqs scope_python_manifest" "true" "$(grep '^scope_python_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
 assert_eq "reqs scope_sca" "true" "$(grep '^scope_sca=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "pkg/main.go"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-go" >/dev/null
+assert_eq "go-only scope_go_code" "true" "$(grep '^scope_go_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "go-only scope_go_manifest" "false" "$(grep '^scope_go_manifest=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "go-only scope_python_code" "false" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "web/app.ts"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-ts" >/dev/null
+assert_eq "ts-only scope_js_code" "true" "$(grep '^scope_js_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "ts-only scope_python_code" "false" "$(grep '^scope_python_code=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "Dockerfile"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-df" >/dev/null
+assert_eq "dockerfile scope_dockerfile" "true" "$(grep '^scope_dockerfile=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "dockerfile scope_container" "true" "$(grep '^scope_container=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "dockerfile scope_sast" "false" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "infra/main.tf"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-tf" >/dev/null
+assert_eq "tf scope_iac" "true" "$(grep '^scope_iac=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "k8s/deploy.yaml"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-yaml" >/dev/null
+assert_eq "k8s yaml scope_iac" "true" "$(grep '^scope_iac=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list ".github/workflows/ci.yml"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-wf" >/dev/null
+assert_eq "workflows scope_workflows" "true" "$(grep '^scope_workflows=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "workflows scope_meta" "true" "$(grep '^scope_meta=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "workflows scope_iac" "false" "$(grep '^scope_iac=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "api/openapi.yaml"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-api" >/dev/null
+assert_eq "openapi scope_api" "true" "$(grep '^scope_api=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "api/schema.graphql"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-gql" >/dev/null
+assert_eq "graphql scope_api" "true" "$(grep '^scope_api=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "src/App.java"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-java" >/dev/null
+assert_eq "java scope_java_code" "true" "$(grep '^scope_java_code=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "java scope_sast" "true" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+
+write_list "app/users_controller.rb"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-rb" >/dev/null
+assert_eq "ruby scope_ruby_code" "true" "$(grep '^scope_ruby_code=' /tmp/gh-scope-out | cut -d= -f2)"
+
+: >"$SCOPE_TMP/none.txt"
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/none.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request "" "" "$SCOPE_TMP/out-none" >/dev/null
+assert_eq "empty diff scope_secrets" "false" "$(grep '^scope_secrets=' /tmp/gh-scope-out | cut -d= -f2)"
+assert_eq "empty diff scope_sast" "false" "$(grep '^scope_sast=' /tmp/gh-scope-out | cut -d= -f2)"
+
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto workflow_dispatch "" "" "$SCOPE_TMP/out-dispatch" >/dev/null
+assert_eq "dispatch auto is full" "full" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
+
+rm -f /tmp/gh-scope-out
+env GITHUB_OUTPUT=/tmp/gh-scope-out SCANKIT_CHANGED_FILES="$SCOPE_TMP/list.txt" \
+  "$ROOT/scripts/resolve-scan-scope.sh" auto pull_request_target "" "" "$SCOPE_TMP/out-prt" >/dev/null
+assert_eq "pull_request_target auto is diff" "diff" "$(grep '^scan_scope=' /tmp/gh-scope-out | cut -d= -f2)"
+
+set +e
+"$ROOT/scripts/resolve-scan-scope.sh" nope pull_request "" "" "$SCOPE_TMP/out-bad" >/dev/null 2>&1
+SCOPE_RC=$?
+set -e
+assert_eq "invalid scan-scope exits 1" "1" "$SCOPE_RC"
 
 rm -f /tmp/gh-scope-out
 env GITHUB_OUTPUT=/tmp/gh-scope-out \
@@ -338,6 +509,77 @@ env GITHUB_OUTPUT=/tmp/gh-scope-out \
 assert_eq "git-diff lists py" "python/app.py" "$(tr '\n' ' ' <"$SCOPE_TMP/out-git/changed-files.txt" | sed 's/ *$//')"
 popd >/dev/null
 rm -rf "$SCOPE_TMP"
+
+echo
+echo "== verify-sha256 =="
+HASH_TMP="$(mktemp)"
+echo "scankit-hash-test" >"$HASH_TMP"
+WANT="$(shasum -a 256 "$HASH_TMP" | awk '{print $1}')"
+if "$ROOT/scripts/verify-sha256.sh" "$HASH_TMP" "$WANT"; then
+  echo "  PASS  verify-sha256 match"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  verify-sha256 match"
+  FAIL=$((FAIL + 1))
+fi
+set +e
+"$ROOT/scripts/verify-sha256.sh" "$HASH_TMP" "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null 2>&1
+HASH_RC=$?
+set -e
+assert_eq "verify-sha256 mismatch exits 1" "1" "$HASH_RC"
+rm -f "$HASH_TMP"
+
+echo
+echo "== scankit-root path =="
+SK_ROOT="$(cd "$ROOT/.github/actions/scankit-root/../../.." && pwd)"
+assert_eq "scankit-root resolves repo" "$ROOT" "$SK_ROOT"
+if [[ -d "$SK_ROOT/.github/pinned" ]]; then
+  echo "  PASS  scankit-root pinned dir exists"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scankit-root pinned dir missing"
+  FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "== prepare-scan-paths =="
+PREP="$(mktemp -d)"
+pushd "$PREP" >/dev/null
+echo 'print(1)' >app.py
+echo 'package main' >main.go
+printf '%s\n' app.py main.go gone.py >changed-files.txt
+rm -f /tmp/gh-prep-out
+env GITHUB_OUTPUT=/tmp/gh-prep-out SCAN_SCOPE=full \
+  "$ROOT/scripts/prepare-scan-paths.sh" >/dev/null
+assert_eq "prep full skip" "false" "$(grep '^skip=' /tmp/gh-prep-out | cut -d= -f2)"
+assert_eq "prep full path_args" "." "$(grep '^path_args=' /tmp/gh-prep-out | cut -d= -f2-)"
+
+rm -f /tmp/gh-prep-out scan-paths.txt
+env GITHUB_OUTPUT=/tmp/gh-prep-out SCAN_SCOPE=diff PATTERNS='\.py$' \
+  "$ROOT/scripts/prepare-scan-paths.sh" >/dev/null
+assert_eq "prep diff py skip" "false" "$(grep '^skip=' /tmp/gh-prep-out | cut -d= -f2)"
+assert_eq "prep diff py count" "1" "$(grep '^path_count=' /tmp/gh-prep-out | cut -d= -f2)"
+assert_eq "prep diff py paths" "app.py" "$(tr '\n' ' ' <scan-paths.txt | sed 's/ *$//')"
+
+rm -f /tmp/gh-prep-out scan-paths.txt
+env GITHUB_OUTPUT=/tmp/gh-prep-out SCAN_SCOPE=diff PATTERNS='\.rb$' \
+  "$ROOT/scripts/prepare-scan-paths.sh" >/dev/null
+assert_eq "prep diff no-match skip" "true" "$(grep '^skip=' /tmp/gh-prep-out | cut -d= -f2)"
+
+rm -f changed-files.txt /tmp/gh-prep-out scan-paths.txt
+mkdir -p changed-files
+printf '%s\n' app.py >changed-files/changed-files.txt
+env GITHUB_OUTPUT=/tmp/gh-prep-out SCAN_SCOPE=diff \
+  "$ROOT/scripts/prepare-scan-paths.sh" >/dev/null
+assert_eq "prep nested artifact skip" "false" "$(grep '^skip=' /tmp/gh-prep-out | cut -d= -f2)"
+assert_eq "prep nested artifact count" "1" "$(grep '^path_count=' /tmp/gh-prep-out | cut -d= -f2)"
+
+rm -rf changed-files /tmp/gh-prep-out scan-paths.txt
+env GITHUB_OUTPUT=/tmp/gh-prep-out SCAN_SCOPE=diff \
+  "$ROOT/scripts/prepare-scan-paths.sh" >/dev/null
+assert_eq "prep missing list skip" "true" "$(grep '^skip=' /tmp/gh-prep-out | cut -d= -f2)"
+popd >/dev/null
+rm -rf "$PREP"
 
 echo
 echo "== action pins =="
@@ -380,7 +622,7 @@ elif [[ -x "$ACTIONLINT_BIN" ]] || {
   chmod +x "$ACTIONLINT_BIN"
 }; then
   set +e
-  "$ACTIONLINT_BIN" -color -shellcheck= -pyflakes= .github/workflows/*.yml
+  "$ACTIONLINT_BIN" -color -shellcheck= -pyflakes= .github/workflows/*.yml templates/*.yml
   AL_EXIT=$?
   set -e
   if [[ "$AL_EXIT" -eq 0 ]]; then
@@ -414,8 +656,22 @@ for f in \
   .github/workflows/reusable-publish-results.yml \
   .github/workflows/reusable-pr-report.yml \
   .github/workflows/ci-self-test.yml \
+  .github/workflows/dependency-review.yml \
   templates/security-all.yml \
   templates/security-all-scheduled.yml \
+  templates/security-sca.yml \
+  templates/security-sast.yml \
+  templates/security-secrets.yml \
+  templates/security-container.yml \
+  templates/security-iac.yml \
+  templates/security-sbom.yml \
+  templates/security-supply-chain.yml \
+  templates/security-privacy.yml \
+  templates/security-api.yml \
+  templates/security-malware.yml \
+  templates/security-meta.yml \
+  scripts/prepare-scan-paths.sh \
+  scripts/verify-sha256.sh \
   docs/scanners.md \
   README.md
 do
@@ -468,6 +724,87 @@ if grep -q 'pr-report-mode' .github/workflows/reusable-pr-report.yml; then
   PASS=$((PASS + 1))
 else
   echo "  FAIL  pr-report workflow missing"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A20 'name: sast-gosec' .github/workflows/reusable-sast.yml | grep -q 'scope_go_code'; then
+  echo "  PASS  gosec runs when Go is in the diff"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  gosec still hard-skips diff"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A25 'name: sast-codeql-langs' .github/workflows/reusable-sast.yml | grep -q 'scope_python_code'; then
+  echo "  PASS  codeql runs per-language on diff"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  codeql still hard-skips diff"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A8 'name: supply-scorecard' .github/workflows/reusable-supply-chain.yml | grep -q "scan-scope != 'diff')"; then
+  echo "  PASS  scorecard still skips pull-request diffs"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scorecard should remain skipped in diff mode"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A8 'name: sca-govulncheck' .github/workflows/reusable-sca.yml | grep -q 'scope_go_code'; then
+  echo "  PASS  govulncheck runs on Go source diffs"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  govulncheck missing scope_go_code trigger"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A30 'name: sca-dependency-review' .github/workflows/reusable-sca.yml | grep -q "github.event_name == 'pull_request'"; then
+  echo "  PASS  dependency review is PR-only"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  dependency review missing pull_request gate"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A40 'name: sca-dependency-review' .github/workflows/reusable-sca.yml | grep -q "fail-on-severity == 'MEDIUM' && 'moderate'"; then
+  echo "  PASS  dependency review maps MEDIUM to moderate"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  dependency review missing severity mapping"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'actions/dependency-review-action@[0-9a-f]\{40\}' .github/workflows/reusable-sca.yml; then
+  echo "  PASS  dependency review action is SHA-pinned"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  dependency review action missing SHA pin"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A3 'permissions:' .github/workflows/reusable-security-full.yml | grep -q 'contents: write' &&
+   grep -A8 'permissions:' .github/workflows/reusable-security-full.yml | grep -q 'security-events: write'; then
+  echo "  PASS  full suite permission ceiling"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite permission ceiling"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -A4 'scan-scope:' .github/workflows/reusable-sast.yml | grep -q 'default: full'; then
+  echo "  PASS  category sast defaults scan-scope full"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  category sast scan-scope default"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'scripts/prepare-scan-paths.sh' .github/actions/prepare-scan-paths/action.yml; then
+  echo "  PASS  prepare-scan-paths action calls script"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  prepare-scan-paths action missing script"
   FAIL=$((FAIL + 1))
 fi
 

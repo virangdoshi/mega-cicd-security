@@ -1,1 +1,1 @@
-# Test fixtures for detect-ecosystems.sh
+# Test fixtures for detect-ecosystems.sh (one signal per ecosystem).

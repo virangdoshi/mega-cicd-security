@@ -60,3 +60,5 @@ Renovate equivalent: enable the `github-actions` manager so `uses: org/scankit/.
 ## Expectation check
 
 Intentional-vuln corpora (and many real apps with HIGH debt) will fail jobs when `fail-on-severity: HIGH`. That is the gate working. For soak / CI green on a known-bad tree, use `fail-on-severity: NONE` and triage via Code Scanning or the PR report.
+
+On **pull requests** with default `scan-scope: auto`, whole-program SAST (CodeQL, Gosec, Brakeman, SpotBugs) runs when matching language files are in the diff. CodeQL uses the action’s incremental/diff-informed analysis — you do not need `scan-scope: full` for it. Scorecard still skips PRs (repo-level). Container image scanners still need a prebuilt `image` unless you set `enable-image-build: true` on a trusted ref.

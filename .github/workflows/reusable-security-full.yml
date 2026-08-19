@@ -70,6 +70,10 @@ on:
         description: Allow CodeQL autobuild / SpotBugs compile (off by default for untrusted PRs)
         type: boolean
         default: false
+      enable-dependency-review:
+        description: Enable GitHub dependency-review-action in SCA (PR events)
+        type: boolean
+        default: true
 
 permissions:
   # Workflow-level ceiling for nested jobs (GitHub does not allow job scopes
@@ -134,6 +138,8 @@ jobs:
       scope_go_code: ${{ steps.scope.outputs.scope_go_code }}
       scope_ruby_code: ${{ steps.scope.outputs.scope_ruby_code }}
       scope_java_code: ${{ steps.scope.outputs.scope_java_code }}
+      scope_python_code: ${{ steps.scope.outputs.scope_python_code }}
+      scope_js_code: ${{ steps.scope.outputs.scope_js_code }}
       scope_python_manifest: ${{ steps.scope.outputs.scope_python_manifest }}
       scope_go_manifest: ${{ steps.scope.outputs.scope_go_manifest }}
       scope_node_manifest: ${{ steps.scope.outputs.scope_node_manifest }}
@@ -194,11 +200,13 @@ jobs:
       scope_sca: ${{ needs.resolve-scope.outputs.scope_sca }}
       scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
       scope_python_manifest: ${{ needs.resolve-scope.outputs.scope_python_manifest }}
+      scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
       scope_go_manifest: ${{ needs.resolve-scope.outputs.scope_go_manifest }}
       scope_node_manifest: ${{ needs.resolve-scope.outputs.scope_node_manifest }}
       scope_rust_manifest: ${{ needs.resolve-scope.outputs.scope_rust_manifest }}
       scope_ruby_manifest: ${{ needs.resolve-scope.outputs.scope_ruby_manifest }}
       scope_php_manifest: ${{ needs.resolve-scope.outputs.scope_php_manifest }}
+      enable-dependency-review: ${{ inputs.enable-dependency-review }}
 
   sast:
     needs: [detect, resolve-scope]
@@ -226,6 +234,8 @@ jobs:
       scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
       scope_ruby_code: ${{ needs.resolve-scope.outputs.scope_ruby_code }}
       scope_java_code: ${{ needs.resolve-scope.outputs.scope_java_code }}
+      scope_python_code: ${{ needs.resolve-scope.outputs.scope_python_code }}
+      scope_js_code: ${{ needs.resolve-scope.outputs.scope_js_code }}
 
   container:
     needs: [detect, resolve-scope]

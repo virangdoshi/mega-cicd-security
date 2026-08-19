@@ -91,6 +91,8 @@ permissions:
 jobs:
   supply-scorecard:
     name: supply-scorecard
+    # Repo-level OpenSSF checks (branch protection, tokens, …), not PR-diff
+    # analysis. Official cadence is push-to-default + schedule, not pull_request.
     if: inputs.enable-scorecard && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff')
     runs-on: ubuntu-latest
     permissions:

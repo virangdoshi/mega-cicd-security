@@ -27,6 +27,9 @@ on:
       scope_go_manifest:
         type: string
         default: "true"
+      scope_go_code:
+        type: string
+        default: "true"
       scope_node_manifest:
         type: string
         default: "true"
@@ -70,6 +73,7 @@ on:
         type: boolean
         default: true
       enable-dependency-review:
+        description: GitHub Dependency Review (pull_request / pull_request_target only)
         type: boolean
         default: true
       enable-owasp-dependency-check:
@@ -221,16 +225,40 @@ jobs:
     name: sca-dependency-review
     if: >
       inputs.enable-dependency-review &&
-      github.event_name == 'pull_request' &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
       (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') &&
       (inputs.scan-scope != 'diff' || inputs.scope_any_manifest == 'true')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Dependency Review
+        id: review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          fail-on-severity: ${{ inputs.fail-on-severity == 'NONE' && 'critical' || inputs.fail-on-severity }}
-        continue-on-error: ${{ inputs.fail-on-severity == 'NONE' }}
+          # Action enum is lowercase low|moderate|high|critical (MEDIUM → moderate).
+          fail-on-severity: ${{ inputs.fail-on-severity == 'LOW' && 'low' || inputs.fail-on-severity == 'MEDIUM' && 'moderate' || inputs.fail-on-severity == 'CRITICAL' && 'critical' || inputs.fail-on-severity == 'NONE' && 'low' || 'high' }}
+          warn-only: ${{ inputs.fail-on-severity == 'NONE' }}
+      - name: Write JSON reports
+        if: always()
+        env:
+          DEPENDENCY_CHANGES: ${{ steps.review.outputs.dependency-changes }}
+          VULNERABLE_CHANGES: ${{ steps.review.outputs.vulnerable-changes }}
+        run: |
+          set -euo pipefail
+          mkdir -p dependency-review
+          printf '%s\n' "${DEPENDENCY_CHANGES:-[]}" > dependency-review/dependency-changes.json
+          printf '%s\n' "${VULNERABLE_CHANGES:-[]}" > dependency-review/vulnerable-changes.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: sca-dependency-review-json
+          path: dependency-review
+          if-no-files-found: warn
 
   sca-owasp-dependency-check:
     name: sca-owasp-dependency-check
@@ -300,7 +328,7 @@ jobs:
 
   sca-govulncheck:
     name: sca-govulncheck
-    if: inputs.enable-govulncheck && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_go_manifest == 'true')
+    if: inputs.enable-govulncheck && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_go_manifest == 'true' || inputs.scope_go_code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

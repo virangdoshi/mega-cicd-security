@@ -28,6 +28,12 @@ on:
       scope_java_code:
         type: string
         default: "true"
+      scope_python_code:
+        type: string
+        default: "true"
+      scope_js_code:
+        type: string
+        default: "true"
       has_generic_code:
         type: string
         default: "true"
@@ -84,9 +90,71 @@ permissions:
   actions: read
 
 jobs:
+  sast-codeql-langs:
+    name: sast-codeql-langs
+    # Whole-program analyzer; codeql-action does incremental/diff-informed
+    # analysis on pull_request. Pick languages present in the diff (or all in full).
+    if: >
+      inputs.enable-codeql &&
+      (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') &&
+      (
+        inputs.scan-scope != 'diff' ||
+        inputs.scope_python_code == 'true' ||
+        inputs.scope_go_code == 'true' ||
+        inputs.scope_ruby_code == 'true' ||
+        inputs.scope_java_code == 'true' ||
+        inputs.scope_js_code == 'true'
+      )
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.pick.outputs.languages }}
+    steps:
+      - name: Pick CodeQL languages
+        id: pick
+        env:
+          SCAN_SCOPE: ${{ inputs.scan-scope }}
+          CODEQL_LANGUAGES: ${{ inputs.codeql-languages }}
+          SCOPE_PYTHON: ${{ inputs.scope_python_code }}
+          SCOPE_GO: ${{ inputs.scope_go_code }}
+          SCOPE_RUBY: ${{ inputs.scope_ruby_code }}
+          SCOPE_JAVA: ${{ inputs.scope_java_code }}
+          SCOPE_JS: ${{ inputs.scope_js_code }}
+        run: |
+          set -euo pipefail
+          default_langs='["javascript-typescript","python","java-kotlin","go","ruby"]'
+          if [[ "$SCAN_SCOPE" != "diff" ]]; then
+            if [[ -n "$CODEQL_LANGUAGES" ]]; then
+              echo "languages=$CODEQL_LANGUAGES" >>"$GITHUB_OUTPUT"
+            else
+              echo "languages=$default_langs" >>"$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          langs=()
+          [[ "$SCOPE_JS" == "true" ]] && langs+=("javascript-typescript")
+          [[ "$SCOPE_PYTHON" == "true" ]] && langs+=("python")
+          [[ "$SCOPE_JAVA" == "true" ]] && langs+=("java-kotlin")
+          [[ "$SCOPE_GO" == "true" ]] && langs+=("go")
+          [[ "$SCOPE_RUBY" == "true" ]] && langs+=("ruby")
+          if [[ ${#langs[@]} -eq 0 ]]; then
+            echo 'languages=[]' >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          json="["
+          first=1
+          for l in "${langs[@]}"; do
+            [[ $first -eq 1 ]] || json+=","
+            json+="\"$l\""
+            first=0
+          done
+          json+="]"
+          echo "languages=$json" >>"$GITHUB_OUTPUT"
+          echo "CodeQL languages for this run: $json"
+
   sast-codeql:
     name: sast-codeql
-    if: inputs.enable-codeql && (inputs.selection-mode == 'all' || inputs.has_generic_code == 'true') && (inputs.scan-scope != 'diff')
+    needs: sast-codeql-langs
+    if: needs.sast-codeql-langs.result == 'success' && needs.sast-codeql-langs.outputs.languages != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -95,11 +163,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ${{ fromJSON(inputs.codeql-languages || '["javascript-typescript","python","java-kotlin","go","ruby"]') }}
+        language: ${{ fromJSON(needs.sast-codeql-langs.outputs.languages) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.checkout-ref || github.sha }}
+          # >= 2 so codeql-action can see the PR merge-base for incremental analysis
+          fetch-depth: 2
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
@@ -226,7 +296,7 @@ jobs:
 
   sast-gosec:
     name: sast-gosec
-    if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff')
+    if: inputs.enable-gosec && (inputs.selection-mode == 'all' || inputs.has_go == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_go_code == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -270,7 +340,7 @@ jobs:
 
   sast-brakeman:
     name: sast-brakeman
-    if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true') && (inputs.scan-scope != 'diff')
+    if: inputs.enable-brakeman && (inputs.selection-mode == 'all' || inputs.has_ruby == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_ruby_code == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -311,7 +381,7 @@ jobs:
 
   sast-spotbugs:
     name: sast-spotbugs
-    if: inputs.enable-spotbugs && inputs.enable-code-build && (inputs.selection-mode == 'all' || inputs.has_java == 'true') && (inputs.scan-scope != 'diff')
+    if: inputs.enable-spotbugs && inputs.enable-code-build && (inputs.selection-mode == 'all' || inputs.has_java == 'true') && (inputs.scan-scope != 'diff' || inputs.scope_java_code == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

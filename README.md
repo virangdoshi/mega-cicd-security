@@ -6,7 +6,7 @@
 
 **Open-source security scanning for GitHub Actions — kitchen-sink coverage, ecosystem-aware, org-ready.**
 
-Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files. On pull requests, `scan-scope: auto` further limits scans to the changed-file diff.
+Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files. On pull requests, `scan-scope: auto` further limits scans to the changed-file diff, and `pr-report-mode: both` posts a sticky summary plus file/line annotations.
 
 [Scanner inventory](docs/scanners.md) · [Org adoption](docs/adoption.md) · [Upgrade 1.0 → 1.1](docs/upgrade-1.1.md) · [Results publishing](docs/results.md) · [Templates](templates/)
 
@@ -101,10 +101,12 @@ On each run: detect ecosystems → resolve scan scope (diff vs full) → paralle
 │  1. detect ecosystems       │
 │  2. resolve scan scope      │
 │  3. parallel category jobs  │
-│  4. optional publish        │
+│  4. PR report (PR events)   │
+│  5. optional git publish    │
 └──────────────┬──────────────┘
                ▼
      Code Scanning + Artifacts
+     + sticky PR comment / annotations
      (+ security-results/ PR or branch)
 ```
 
@@ -116,6 +118,7 @@ On each run: detect ecosystems → resolve scan scope (diff vs full) → paralle
 |----------|-------------------|------------------|
 | **Full suite** | [`reusable-security-full.yml`](.github/workflows/reusable-security-full.yml) | [`security-all.yml`](templates/security-all.yml) |
 | **Scheduled + results PR** | same | [`security-all-scheduled.yml`](templates/security-all-scheduled.yml) |
+| **PR report** | [`reusable-pr-report.yml`](.github/workflows/reusable-pr-report.yml) | (wired by the full suite) |
 | SCA | `reusable-sca.yml` | `security-sca.yml` |
 | SAST (+ ShellCheck) | `reusable-sast.yml` | `security-sast.yml` |
 | Secrets | `reusable-secrets.yml` | `security-secrets.yml` |
@@ -161,7 +164,9 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | `fail-on-severity` | `HIGH` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` |
 | `results-publish-mode` | `none` | `none` \| `branch` \| `pull-request` |
 | `pr-report-mode` | `both` | On `pull_request`: `none` \| `comment` \| `annotations` \| `both` (sticky PR summary + file/line annotations) |
-| `image` / `dockerfile` | — | Container scans; builds Dockerfile when image empty |
+| `image` / `dockerfile` | — | Container scans; image scanners need a prebuilt `image` unless you opt into a Dockerfile build |
+| `enable-image-build` | `false` | Build from `dockerfile` when `image` is empty (keep off on untrusted PRs) |
+| `enable-code-build` | `false` | Allow CodeQL autobuild / SpotBugs compile (keep off on untrusted PRs) |
 | `enable-scancode` | `false` | Heavy license scan (opt-in) |
 | `enable-<tool>` | `true` | Per-tool toggles on each category workflow |
 
@@ -180,10 +185,11 @@ By default, **pull requests scan the diff**; **pushes and manual runs scan the w
 In **diff** mode:
 
 - Path-aware tools (Semgrep, Bandit, ShellCheck, detect-secrets, …) only scan matching changed files.
-- Tools that cannot take a file list (CodeQL, Gosec, Scorecard, image scanners, …) are **skipped** unless the diff triggers them (e.g. lockfile → SCA, Dockerfile → container, `.github/workflows/**` → meta/pinact).
-- SCA/SBOM still analyze manifests/lockfiles when those files change (not path-filtered line-by-line).
+- Whole-program SAST still runs when matching language files change: CodeQL (incremental/diff-informed via `codeql-action`), Gosec, Brakeman, SpotBugs (needs `enable-code-build`). Scorecard stays skipped (repo policy, not a PR diff).
+- Other full-tree tools are **skipped unless the diff triggers them** (lockfile → SCA/SBOM, Dockerfile → container, `.github/workflows/**` → meta/pinact).
+- SCA/SBOM still analyze manifests/lockfiles when those files change (not path-filtered line-by-line). govulncheck also runs when `.go` files change.
 
-Force a full PR scan with `scan-scope: full`. More detail: [docs/adoption.md](docs/adoption.md#scan-scope-diff-vs-full).
+Callers do **not** copy `.github/pinned/` — jobs resolve pin files and helper scripts from the scankit checkout (`scankit-root`). Force a full PR scan with `scan-scope: full`. More detail: [docs/adoption.md](docs/adoption.md#scan-scope-diff-vs-full) and [docs/scanners.md](docs/scanners.md#diff-mode-behavior-full-suite).
 
 ### Ecosystem detection
 
@@ -273,9 +279,15 @@ More detail: [docs/results.md](docs/results.md).
 | `uses:` cannot access workflow | Private library without access | Grant org Actions access to the library |
 | Silent `startup_failure` | Caller permissions below full-suite ceiling | Grant `contents: write` + `pull-requests: write` + `security-events: write` |
 | Too many jobs skipped | `detected` + no manifests, or `diff` + unrelated files | Use `all`, `scan-scope: full`, or change relevant files |
-| Container jobs skipped | No Dockerfile / empty `image` / diff without Dockerfile | Pass `image`, add a Dockerfile, or use `scan-scope: full` |
+| CodeQL / Gosec skipped on a docs-only PR | No matching language files in the diff | Expected; change source or use `scan-scope: full` |
+| Scorecard skipped on a PR | Repo-level checks, not diff analysis | Expected; runs on push/`workflow_dispatch` / `scan-scope: full` |
+| Dependency Review skipped on push | GitHub compares PR dependency diffs only | Expected; runs on `pull_request` when manifests change (`enable-dependency-review: false` to disable) |
+| Dependency Review errors / no results | Dependency graph off, or private repo without GHAS | Enable **Settings → Code security → Dependency graph** (public: free; private: GHAS) |
+| Container jobs skipped | No prebuilt `image`, `enable-image-build: false` (default), or diff without Dockerfile | Pass `image`, opt into `enable-image-build` on trusted refs, or `scan-scope: full` |
 | Cosign/SLSA skipped | Missing identity / artifact inputs | Set the inputs above |
 | Publish did nothing | `none` or missing write perms | Set mode + `contents`/`pull-requests: write` |
+| No sticky PR comment | Not a `pull_request`, or `pr-report-mode: none` | Default is `both` on PR events; needs `pull-requests: write` |
+| Annotation noise on Files | `pr-report-mode: both` + many SARIF hits | `pr-report-mode: comment` (summary only) or `none` |
 | ClamAV slow | Freshclam + full tree | `enable-clamav: false` on malware workflow |
 
 ---
@@ -285,10 +297,21 @@ More detail: [docs/results.md](docs/results.md).
 ```bash
 ./scripts/detect-ecosystems.sh . /tmp/ecosystems.json
 ./scripts/resolve-scan-scope.sh auto pull_request <base_sha> <head_sha> /tmp/scope-out
+./scripts/check-action-pins.sh
 ./tests/run.sh
 ```
 
-CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (unit tests + actionlint/zizmor + detect smoke).
+CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (unit tests + actionlint/zizmor + detect smoke). This repo’s PRs also run [`.github/workflows/dependency-review.yml`](.github/workflows/dependency-review.yml).
+
+### Hash pins (maintainers)
+
+Python tools install with `pip install --require-hashes -r .github/pinned/<tool>.txt`. After bumping a package version, regenerate with [pip-tools](https://github.com/jazzband/pip-tools):
+
+```bash
+pip-compile --generate-hashes --allow-unsafe --output-file .github/pinned/flare-capa.txt <(printf 'flare-capa==7.4.0\n')
+```
+
+`--allow-unsafe` is required so transitive `pip` / `setuptools` get hashes. Release binaries live in [`.github/pinned/checksums.sha256`](.github/pinned/checksums.sha256) and are checked by [`scripts/verify-sha256.sh`](scripts/verify-sha256.sh). npm API linters use [`.github/pinned/npm-api/`](.github/pinned/npm-api/). Cross-repo jobs load these via [`scankit-root`](.github/actions/scankit-root/), not the caller workspace.
 
 ### Reference docs
 
@@ -296,7 +319,8 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 |-----|-------------|
 | [docs/scanners.md](docs/scanners.md) | Full tool inventory + diff-mode behavior |
 | [docs/adoption.md](docs/adoption.md) | Org rollout, permissions ceiling, scan-scope |
-| [docs/results.md](docs/results.md) | Publish modes & schedules |
+| [docs/results.md](docs/results.md) | PR report, git publish modes & schedules |
+| [docs/upgrade-1.1.md](docs/upgrade-1.1.md) | Pin bump + new inputs for 1.0 callers |
 
 ---
 
@@ -304,7 +328,8 @@ CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (
 
 - Prefer **SHA-pinned** `uses:` for this library and for third-party Actions (already pinned inside this repo).
 - Workflow inputs are passed into shells via `env:` (not `${{ }}` interpolation inside `run:`) to avoid expression injection.
-- Docker image builds and CodeQL/SpotBugs compiles are **off by default** (`enable-image-build` / `enable-code-build`) so PR pipelines do not execute untrusted build scripts.
+- Docker image builds and CodeQL/SpotBugs compiles are **off by default** (`enable-image-build` / `enable-code-build`) so PR pipelines do not execute untrusted build scripts. Pass a prebuilt `image` for container CVE scans on PRs.
+- Cross-repo callers do not need `.github/pinned/` in the app repo; pin files and `scripts/verify-sha256.sh` resolve via `scankit-root`.
 - Results publish excludes secret-scanner artifacts and only allows `security-results` branch names.
 - CI enforces Action pin hashes via [`scripts/check-action-pins.sh`](scripts/check-action-pins.sh) (run from `./tests/run.sh`).
 - Dependabot updates those SHAs in a **single weekly grouped PR**.
