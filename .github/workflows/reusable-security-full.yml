@@ -70,6 +70,10 @@ on:
         description: Allow CodeQL autobuild / SpotBugs compile (off by default for untrusted PRs)
         type: boolean
         default: false
+      enable-dependency-review:
+        description: Enable GitHub dependency-review-action in SCA (PR events)
+        type: boolean
+        default: true
 
 permissions:
   # Workflow-level ceiling for nested jobs (GitHub does not allow job scopes
@@ -202,6 +206,7 @@ jobs:
       scope_rust_manifest: ${{ needs.resolve-scope.outputs.scope_rust_manifest }}
       scope_ruby_manifest: ${{ needs.resolve-scope.outputs.scope_ruby_manifest }}
       scope_php_manifest: ${{ needs.resolve-scope.outputs.scope_php_manifest }}
+      enable-dependency-review: ${{ inputs.enable-dependency-review }}
 
   sast:
     needs: [detect, resolve-scope]
