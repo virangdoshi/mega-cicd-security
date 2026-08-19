@@ -33,7 +33,8 @@ Copy files from [`templates/`](../templates/) into the app’s `.github/workflow
 
 1. **Actions** enabled for the app repo.
 2. **Code Scanning** enabled so SARIF uploads show under the Security tab (public repos: free; private: GitHub Advanced Security entitlement).
-3. For **private** reusable workflow libraries, grant caller access (see below).
+3. **Dependency graph** so SCA **Dependency Review** can compare PR dependency diffs (public: free; private: GHAS). The job is PR-only; disable with `enable-dependency-review: false` on `reusable-sca`.
+4. For **private** reusable workflow libraries, grant caller access (see below).
 
 ## Private library access (org settings)
 

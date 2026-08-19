@@ -281,6 +281,8 @@ More detail: [docs/results.md](docs/results.md).
 | Too many jobs skipped | `detected` + no manifests, or `diff` + unrelated files | Use `all`, `scan-scope: full`, or change relevant files |
 | CodeQL / Gosec skipped on a docs-only PR | No matching language files in the diff | Expected; change source or use `scan-scope: full` |
 | Scorecard skipped on a PR | Repo-level checks, not diff analysis | Expected; runs on push/`workflow_dispatch` / `scan-scope: full` |
+| Dependency Review skipped on push | GitHub compares PR dependency diffs only | Expected; runs on `pull_request` when manifests change (`enable-dependency-review: false` to disable) |
+| Dependency Review errors / no results | Dependency graph off, or private repo without GHAS | Enable **Settings → Code security → Dependency graph** (public: free; private: GHAS) |
 | Container jobs skipped | No prebuilt `image`, `enable-image-build: false` (default), or diff without Dockerfile | Pass `image`, opt into `enable-image-build` on trusted refs, or `scan-scope: full` |
 | Cosign/SLSA skipped | Missing identity / artifact inputs | Set the inputs above |
 | Publish did nothing | `none` or missing write perms | Set mode + `contents`/`pull-requests: write` |
@@ -299,7 +301,7 @@ More detail: [docs/results.md](docs/results.md).
 ./tests/run.sh
 ```
 
-CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (unit tests + actionlint/zizmor + detect smoke).
+CI: [`.github/workflows/ci-self-test.yml`](.github/workflows/ci-self-test.yml) (unit tests + actionlint/zizmor + detect smoke). This repo’s PRs also run [`.github/workflows/dependency-review.yml`](.github/workflows/dependency-review.yml).
 
 ### Hash pins (maintainers)
 

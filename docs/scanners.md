@@ -27,7 +27,7 @@ Force a full PR scan with `scan-scope: full`. Category-only workflows default `s
 | OSV-Scanner | SCA | `has_generic_code` | yes | true |
 | Trivy filesystem | SCA | `has_generic_code` | yes | true |
 | Grype (dir / Anchore scan-action) | SCA | `has_generic_code` | yes | true |
-| Dependency Review | SCA | `has_generic_code` (PR only) | n/a | true |
+| Dependency Review | SCA | `has_generic_code` (PR only; needs Dependency graph) | n/a | true |
 | OWASP Dependency-Check | SCA | `has_generic_code` | no | true |
 | pip-audit | SCA | `has_python` | no | true |
 | govulncheck | SCA | `has_go` | no | true |
