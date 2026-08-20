@@ -11,7 +11,11 @@
 
 ## Pin bump
 
-Replace your workflow SHA with the [v1.2.0](https://github.com/virangdoshi/scankit/releases/tag/v1.2.0) release commit.
+Replace your workflow SHA with the [v1.2.0](https://github.com/virangdoshi/scankit/releases/tag/v1.2.0) release commit:
+
+```yaml
+uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e
+```
 
 ## New inputs (optional)
 

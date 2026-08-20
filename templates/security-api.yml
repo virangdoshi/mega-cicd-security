@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   api:
-    uses: OWNER/scankit/.github/workflows/reusable-api.yml@de0865046614b990bf4c242d38a5a4a107df2bbc # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-api.yml@c7197e7783122e34257224c14b355c92a9d1450e # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH

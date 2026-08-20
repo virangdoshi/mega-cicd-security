@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   security:
-    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@de0865046614b990bf4c242d38a5a4a107df2bbc
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e
     with:
       profile: soak
       selection-mode: detected
