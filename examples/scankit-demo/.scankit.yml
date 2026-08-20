@@ -1,0 +1,3 @@
+profile: soak
+fail-on-severity: NONE
+pr-report-mode: both

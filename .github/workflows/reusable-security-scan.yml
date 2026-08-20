@@ -1,0 +1,479 @@
+name: Reusable Security Scan (read-only ceiling)
+
+on:
+  workflow_call:
+    inputs:
+      selection-mode:
+        type: string
+        default: detected
+      fail-on-severity:
+        type: string
+        default: HIGH
+      checkout-ref:
+        type: string
+        default: ""
+      scan-scope:
+        description: auto (diff on PR, full otherwise) | diff | full
+        type: string
+        default: auto
+      image:
+        type: string
+        default: ""
+      dockerfile:
+        type: string
+        default: Dockerfile
+      cosign-certificate-identity:
+        type: string
+        default: ""
+      cosign-certificate-oidc-issuer:
+        type: string
+        default: ""
+      conftest-policy-path:
+        type: string
+        default: ""
+      slsa-artifact:
+        type: string
+        default: ""
+      slsa-source-uri:
+        type: string
+        default: ""
+      privacy-paths:
+        type: string
+        default: ""
+      api-spec-paths:
+        type: string
+        default: ""
+      malware-scan-paths:
+        type: string
+        default: "."
+      malware-binary-paths:
+        type: string
+        default: ""
+      enable-scancode:
+        type: boolean
+        default: false
+      enable-image-build:
+        description: Allow docker build from Dockerfile (off by default for untrusted PRs)
+        type: boolean
+        default: false
+      enable-code-build:
+        description: Allow CodeQL autobuild / SpotBugs compile (off by default for untrusted PRs)
+        type: boolean
+        default: false
+      enable-dependency-review:
+        description: Enable GitHub dependency-review-action in SCA (PR events)
+        type: boolean
+        default: true
+      profile:
+        description: minimal | standard | audit | soak (empty uses .scankit.yml when config-path set)
+        type: string
+        default: ""
+      config-path:
+        description: Optional .scankit.yml path (workflow inputs override file values)
+        type: string
+        default: ""
+      enable-dast:
+        description: Run optional OWASP ZAP baseline (requires dast-url; trusted refs only)
+        type: boolean
+        default: false
+      dast-url:
+        description: Staging URL for DAST (never production)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+  pull-requests: read
+  packages: read
+
+jobs:
+  detect:
+    name: detect-ecosystems
+    runs-on: ubuntu-latest
+    outputs:
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_go: ${{ steps.detect.outputs.has_go }}
+      has_java: ${{ steps.detect.outputs.has_java }}
+      has_ruby: ${{ steps.detect.outputs.has_ruby }}
+      has_node: ${{ steps.detect.outputs.has_node }}
+      has_rust: ${{ steps.detect.outputs.has_rust }}
+      has_php: ${{ steps.detect.outputs.has_php }}
+      has_dotnet: ${{ steps.detect.outputs.has_dotnet }}
+      has_docker: ${{ steps.detect.outputs.has_docker }}
+      has_terraform: ${{ steps.detect.outputs.has_terraform }}
+      has_k8s: ${{ steps.detect.outputs.has_k8s }}
+      has_cloudformation: ${{ steps.detect.outputs.has_cloudformation }}
+      has_openapi: ${{ steps.detect.outputs.has_openapi }}
+      has_graphql: ${{ steps.detect.outputs.has_graphql }}
+      has_binary: ${{ steps.detect.outputs.has_binary }}
+      has_actions: ${{ steps.detect.outputs.has_actions }}
+      has_shell: ${{ steps.detect.outputs.has_shell }}
+      has_generic_code: ${{ steps.detect.outputs.has_generic_code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Detect
+        id: detect
+        # Full owner/repo/path@sha — relative ./ resolves to the *caller* repo and breaks cross-repo use
+        uses: virangdoshi/scankit/.github/actions/detect-ecosystems@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
+
+  resolve-settings:
+    name: resolve-settings
+    runs-on: ubuntu-latest
+    outputs:
+      scan_scope: ${{ steps.settings.outputs.scan_scope }}
+      fail_on_severity: ${{ steps.settings.outputs.fail_on_severity }}
+      pr_report_mode: ${{ steps.settings.outputs.pr_report_mode }}
+      enable_dast: ${{ steps.settings.outputs.enable_dast }}
+      dast_url: ${{ steps.settings.outputs.dast_url }}
+      run_secrets: ${{ steps.settings.outputs.run_secrets }}
+      run_sca: ${{ steps.settings.outputs.run_sca }}
+      run_sast: ${{ steps.settings.outputs.run_sast }}
+      run_container: ${{ steps.settings.outputs.run_container }}
+      run_iac: ${{ steps.settings.outputs.run_iac }}
+      run_sbom: ${{ steps.settings.outputs.run_sbom }}
+      run_supply: ${{ steps.settings.outputs.run_supply }}
+      run_privacy: ${{ steps.settings.outputs.run_privacy }}
+      run_api: ${{ steps.settings.outputs.run_api }}
+      run_malware: ${{ steps.settings.outputs.run_malware }}
+      run_meta: ${{ steps.settings.outputs.run_meta }}
+      run_dast: ${{ steps.settings.outputs.run_dast }}
+      enable-codeql: ${{ steps.settings.outputs.enable-codeql }}
+      enable-semgrep: ${{ steps.settings.outputs.enable-semgrep }}
+      enable-bandit: ${{ steps.settings.outputs.enable-bandit }}
+      enable-gosec: ${{ steps.settings.outputs.enable-gosec }}
+      enable-brakeman: ${{ steps.settings.outputs.enable-brakeman }}
+      enable-spotbugs: ${{ steps.settings.outputs.enable-spotbugs }}
+      enable-devskim: ${{ steps.settings.outputs.enable-devskim }}
+      enable-shellcheck: ${{ steps.settings.outputs.enable-shellcheck }}
+      enable-actionlint: ${{ steps.settings.outputs.enable-actionlint }}
+      enable-zizmor: ${{ steps.settings.outputs.enable-zizmor }}
+      enable-harden-runner: ${{ steps.settings.outputs.enable-harden-runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve settings
+        id: settings
+        uses: ./.github/actions/resolve-settings
+        with:
+          profile: ${{ inputs.profile }}
+          config-path: ${{ inputs.config-path }}
+          scan-scope: ${{ inputs.scan-scope }}
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          pr-report-mode: none
+          enable-dast: ${{ inputs.enable-dast }}
+          dast-url: ${{ inputs.dast-url }}
+
+  resolve-scope:
+    name: resolve-scan-scope
+    needs: [resolve-settings]
+    runs-on: ubuntu-latest
+    outputs:
+      scan_scope: ${{ steps.scope.outputs.scan_scope }}
+      changed_file_count: ${{ steps.scope.outputs.changed_file_count }}
+      has_changed_files: ${{ steps.scope.outputs.has_changed_files }}
+      scope_sast: ${{ steps.scope.outputs.scope_sast }}
+      scope_secrets: ${{ steps.scope.outputs.scope_secrets }}
+      scope_sca: ${{ steps.scope.outputs.scope_sca }}
+      scope_iac: ${{ steps.scope.outputs.scope_iac }}
+      scope_container: ${{ steps.scope.outputs.scope_container }}
+      scope_api: ${{ steps.scope.outputs.scope_api }}
+      scope_privacy: ${{ steps.scope.outputs.scope_privacy }}
+      scope_malware: ${{ steps.scope.outputs.scope_malware }}
+      scope_meta: ${{ steps.scope.outputs.scope_meta }}
+      scope_sbom: ${{ steps.scope.outputs.scope_sbom }}
+      scope_supply: ${{ steps.scope.outputs.scope_supply }}
+      scope_go_code: ${{ steps.scope.outputs.scope_go_code }}
+      scope_ruby_code: ${{ steps.scope.outputs.scope_ruby_code }}
+      scope_java_code: ${{ steps.scope.outputs.scope_java_code }}
+      scope_python_code: ${{ steps.scope.outputs.scope_python_code }}
+      scope_js_code: ${{ steps.scope.outputs.scope_js_code }}
+      scope_python_manifest: ${{ steps.scope.outputs.scope_python_manifest }}
+      scope_go_manifest: ${{ steps.scope.outputs.scope_go_manifest }}
+      scope_node_manifest: ${{ steps.scope.outputs.scope_node_manifest }}
+      scope_rust_manifest: ${{ steps.scope.outputs.scope_rust_manifest }}
+      scope_ruby_manifest: ${{ steps.scope.outputs.scope_ruby_manifest }}
+      scope_php_manifest: ${{ steps.scope.outputs.scope_php_manifest }}
+      scope_dotnet_manifest: ${{ steps.scope.outputs.scope_dotnet_manifest }}
+      scope_dockerfile: ${{ steps.scope.outputs.scope_dockerfile }}
+      scope_workflows: ${{ steps.scope.outputs.scope_workflows }}
+      scope_any_manifest: ${{ steps.scope.outputs.scope_any_manifest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          fetch-depth: 0
+      - name: Resolve scan scope
+        id: scope
+        uses: virangdoshi/scankit/.github/actions/resolve-scan-scope@9a80cbd5716e521391b7993fb0cfab26c3f3d442
+        with:
+          scan-scope: ${{ needs.resolve-settings.outputs.scan_scope }}
+          event-name: ${{ github.event_name }}
+          base-sha: ${{ github.event.pull_request.base.sha }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
+  secrets:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_secrets == 'true'
+    uses: ./.github/workflows/reusable-secrets.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_secrets: ${{ needs.resolve-scope.outputs.scope_secrets }}
+
+  sca:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sca == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-sca.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      has_python: ${{ needs.detect.outputs.has_python }}
+      has_go: ${{ needs.detect.outputs.has_go }}
+      has_node: ${{ needs.detect.outputs.has_node }}
+      has_rust: ${{ needs.detect.outputs.has_rust }}
+      has_ruby: ${{ needs.detect.outputs.has_ruby }}
+      has_php: ${{ needs.detect.outputs.has_php }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sca: ${{ needs.resolve-scope.outputs.scope_sca }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
+      scope_python_manifest: ${{ needs.resolve-scope.outputs.scope_python_manifest }}
+      scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
+      scope_go_manifest: ${{ needs.resolve-scope.outputs.scope_go_manifest }}
+      scope_node_manifest: ${{ needs.resolve-scope.outputs.scope_node_manifest }}
+      scope_rust_manifest: ${{ needs.resolve-scope.outputs.scope_rust_manifest }}
+      scope_ruby_manifest: ${{ needs.resolve-scope.outputs.scope_ruby_manifest }}
+      scope_php_manifest: ${{ needs.resolve-scope.outputs.scope_php_manifest }}
+      enable-dependency-review: ${{ inputs.enable-dependency-review }}
+
+  sast:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sast == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-sast.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      has_python: ${{ needs.detect.outputs.has_python }}
+      has_go: ${{ needs.detect.outputs.has_go }}
+      has_ruby: ${{ needs.detect.outputs.has_ruby }}
+      has_java: ${{ needs.detect.outputs.has_java }}
+      has_shell: ${{ needs.detect.outputs.has_shell }}
+      enable-code-build: ${{ inputs.enable-code-build }}
+      enable-codeql: ${{ needs.resolve-settings.outputs.enable-codeql }}
+      enable-semgrep: ${{ needs.resolve-settings.outputs.enable-semgrep }}
+      enable-bandit: ${{ needs.resolve-settings.outputs.enable-bandit }}
+      enable-gosec: ${{ needs.resolve-settings.outputs.enable-gosec }}
+      enable-brakeman: ${{ needs.resolve-settings.outputs.enable-brakeman }}
+      enable-spotbugs: ${{ needs.resolve-settings.outputs.enable-spotbugs }}
+      enable-devskim: ${{ needs.resolve-settings.outputs.enable-devskim }}
+      enable-shellcheck: ${{ needs.resolve-settings.outputs.enable-shellcheck }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sast: ${{ needs.resolve-scope.outputs.scope_sast }}
+      scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
+      scope_ruby_code: ${{ needs.resolve-scope.outputs.scope_ruby_code }}
+      scope_java_code: ${{ needs.resolve-scope.outputs.scope_java_code }}
+      scope_python_code: ${{ needs.resolve-scope.outputs.scope_python_code }}
+      scope_js_code: ${{ needs.resolve-scope.outputs.scope_js_code }}
+
+  container:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_container == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-container.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_docker: ${{ needs.detect.outputs.has_docker }}
+      image: ${{ inputs.image }}
+      dockerfile: ${{ inputs.dockerfile }}
+      cosign-certificate-identity: ${{ inputs.cosign-certificate-identity }}
+      cosign-certificate-oidc-issuer: ${{ inputs.cosign-certificate-oidc-issuer }}
+      enable-image-build: ${{ inputs.enable-image-build }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_container: ${{ needs.resolve-scope.outputs.scope_container }}
+      scope_dockerfile: ${{ needs.resolve-scope.outputs.scope_dockerfile }}
+
+  iac:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_iac == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-iac.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      has_terraform: ${{ needs.detect.outputs.has_terraform }}
+      has_k8s: ${{ needs.detect.outputs.has_k8s }}
+      has_cloudformation: ${{ needs.detect.outputs.has_cloudformation }}
+      conftest-policy-path: ${{ inputs.conftest-policy-path }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_iac: ${{ needs.resolve-scope.outputs.scope_iac }}
+
+  sbom:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sbom == 'true'
+    uses: ./.github/workflows/reusable-sbom.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      enable-scancode: ${{ inputs.enable-scancode }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_sbom: ${{ needs.resolve-scope.outputs.scope_sbom }}
+
+  supply-chain:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_supply == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-supply-chain.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: NONE
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      has_actions: ${{ needs.detect.outputs.has_actions }}
+      has_python: ${{ needs.detect.outputs.has_python }}
+      has_node: ${{ needs.detect.outputs.has_node }}
+      has_go: ${{ needs.detect.outputs.has_go }}
+      image: ${{ inputs.image }}
+      cosign-certificate-identity: ${{ inputs.cosign-certificate-identity }}
+      cosign-certificate-oidc-issuer: ${{ inputs.cosign-certificate-oidc-issuer }}
+      slsa-artifact: ${{ inputs.slsa-artifact }}
+      slsa-source-uri: ${{ inputs.slsa-source-uri }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_supply: ${{ needs.resolve-scope.outputs.scope_supply }}
+      scope_workflows: ${{ needs.resolve-scope.outputs.scope_workflows }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
+
+  privacy:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_privacy == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-privacy.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      privacy-paths: ${{ inputs.privacy-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_privacy: ${{ needs.resolve-scope.outputs.scope_privacy }}
+
+  api:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_api == 'true'
+    uses: ./.github/workflows/reusable-api.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_openapi: ${{ needs.detect.outputs.has_openapi }}
+      has_graphql: ${{ needs.detect.outputs.has_graphql }}
+      api-spec-paths: ${{ inputs.api-spec-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_api: ${{ needs.resolve-scope.outputs.scope_api }}
+
+  malware:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_malware == 'true'
+    uses: ./.github/workflows/reusable-malware.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
+      has_binary: ${{ needs.detect.outputs.has_binary }}
+      has_python: ${{ needs.detect.outputs.has_python }}
+      has_node: ${{ needs.detect.outputs.has_node }}
+      has_go: ${{ needs.detect.outputs.has_go }}
+      malware-scan-paths: ${{ inputs.malware-scan-paths }}
+      malware-binary-paths: ${{ inputs.malware-binary-paths }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_malware: ${{ needs.resolve-scope.outputs.scope_malware }}
+      scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
+
+  meta:
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_meta == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      id-token: write
+      pull-requests: read
+      packages: read
+    uses: ./.github/workflows/reusable-meta.yml
+    with:
+      selection-mode: ${{ inputs.selection-mode }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      has_actions: ${{ needs.detect.outputs.has_actions }}
+      enable-actionlint: ${{ needs.resolve-settings.outputs.enable-actionlint }}
+      enable-zizmor: ${{ needs.resolve-settings.outputs.enable-zizmor }}
+      enable-harden-runner: ${{ needs.resolve-settings.outputs.enable-harden-runner }}
+      scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
+      scope_meta: ${{ needs.resolve-scope.outputs.scope_meta }}
+      scope_workflows: ${{ needs.resolve-scope.outputs.scope_workflows }}
+
+  dast:
+    needs: [resolve-settings]
+    if: needs.resolve-settings.outputs.enable_dast == 'true' && needs.resolve-settings.outputs.dast_url != ''
+    uses: ./.github/workflows/reusable-dast.yml
+    with:
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      dast-url: ${{ needs.resolve-settings.outputs.dast_url }}
+

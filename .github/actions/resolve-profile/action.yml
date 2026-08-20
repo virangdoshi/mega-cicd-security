@@ -1,0 +1,78 @@
+name: resolve-profile
+description: Map scankit profile to category and tool enable flags
+inputs:
+  profile:
+    description: minimal | standard | audit | soak
+    required: false
+    default: standard
+outputs:
+  run_secrets:
+    description: Run secrets category
+    value: ${{ steps.run.outputs.run_secrets }}
+  run_sca:
+    value: ${{ steps.run.outputs.run_sca }}
+  run_sast:
+    value: ${{ steps.run.outputs.run_sast }}
+  run_container:
+    value: ${{ steps.run.outputs.run_container }}
+  run_iac:
+    value: ${{ steps.run.outputs.run_iac }}
+  run_sbom:
+    value: ${{ steps.run.outputs.run_sbom }}
+  run_supply:
+    value: ${{ steps.run.outputs.run_supply }}
+  run_privacy:
+    value: ${{ steps.run.outputs.run_privacy }}
+  run_api:
+    value: ${{ steps.run.outputs.run_api }}
+  run_malware:
+    value: ${{ steps.run.outputs.run_malware }}
+  run_meta:
+    value: ${{ steps.run.outputs.run_meta }}
+  run_dast:
+    value: ${{ steps.run.outputs.run_dast }}
+  enable-codeql:
+    value: ${{ steps.run.outputs.enable-codeql }}
+  enable-semgrep:
+    value: ${{ steps.run.outputs.enable-semgrep }}
+  enable-bandit:
+    value: ${{ steps.run.outputs.enable-bandit }}
+  enable-gosec:
+    value: ${{ steps.run.outputs.enable-gosec }}
+  enable-brakeman:
+    value: ${{ steps.run.outputs.enable-brakeman }}
+  enable-spotbugs:
+    value: ${{ steps.run.outputs.enable-spotbugs }}
+  enable-devskim:
+    value: ${{ steps.run.outputs.enable-devskim }}
+  enable-shellcheck:
+    value: ${{ steps.run.outputs.enable-shellcheck }}
+  enable-actionlint:
+    value: ${{ steps.run.outputs.enable-actionlint }}
+  enable-zizmor:
+    value: ${{ steps.run.outputs.enable-zizmor }}
+  enable-harden-runner:
+    value: ${{ steps.run.outputs.enable-harden-runner }}
+  effective_scan_scope:
+    value: ${{ steps.run.outputs.effective_scan_scope }}
+  effective_fail_on:
+    value: ${{ steps.run.outputs.effective_fail_on }}
+  effective_pr_report:
+    value: ${{ steps.run.outputs.effective_pr_report }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PROFILE: ${{ inputs.profile }}
+        OUT: ${{ runner.temp }}/profile.out
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/resolve-profile.sh" "$PROFILE" "$OUT"
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          echo "$line" >> "$GITHUB_OUTPUT"
+        done < "$OUT"

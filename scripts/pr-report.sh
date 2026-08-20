@@ -37,8 +37,30 @@ if p.is_file():
 findings = list(data.get("findings") or [])
 by_sev = data.get("by_severity") or {}
 by_tool = data.get("by_tool") or {}
+by_cat = data.get("by_category") or {}
 total_unique = int(data.get("total_unique") or len(findings))
 total_raw = int(data.get("total_raw") or 0)
+multi_tool = sum(1 for f in findings if len(f.get("tools") or []) > 1)
+
+def normalize_sev(sev: str) -> str:
+    s = (sev or "UNKNOWN").upper()
+    return "HIGH" if s == "CRITICAL" else s
+
+def categorize_f(f):
+    if f.get("category"):
+        return f["category"]
+    tools = " ".join(f.get("tools") or [])
+    rule = f.get("ruleId") or ""
+    blob = (tools + " " + rule).lower()
+    if "secret" in blob or "gitleaks" in blob or "trufflehog" in blob:
+        return "secrets"
+    if any(x in blob for x in ("trivy", "grype", "osv", "dependency", "cargo", "pip-audit")):
+        return "sca"
+    if any(x in blob for x in ("semgrep", "codeql", "bandit", "gosec")):
+        return "sast"
+    if any(x in blob for x in ("checkov", "kics", "terraform", "kube")):
+        return "iac"
+    return "other"
 
 def esc(s: str) -> str:
     # Workflow-command property values: escape % \r \n and commas/colons
@@ -75,7 +97,7 @@ if want_ann:
     emitted = 0
     skipped_no_loc = 0
     for f in findings:
-        sev = (f.get("severity") or "UNKNOWN").upper()
+        sev = normalize_sev(f.get("severity") or "UNKNOWN")
         if sev == "HIGH":
             level, cap = "error", max_error
         elif sev == "MEDIUM":
@@ -114,10 +136,21 @@ if run_url:
     lines.append("")
 
 lines.append(f"- Unique SARIF findings: **{total_unique}** (raw results: {total_raw})")
+if multi_tool:
+    lines.append(f"- Findings flagged by multiple tools: **{multi_tool}** (intentional overlap — triage once in Code Scanning)")
 for sev in ("HIGH", "MEDIUM", "LOW", "UNKNOWN"):
     if sev in by_sev:
         lines.append(f"- {sev}: **{by_sev[sev]}**")
 lines.append("")
+
+if by_cat:
+    lines.append("### By category")
+    lines.append("")
+    lines.append("| Category | Count |")
+    lines.append("|----------|-------|")
+    for cat, n in sorted(by_cat.items(), key=lambda x: (-x[1], x[0])):
+        lines.append(f"| {cat} | {n} |")
+    lines.append("")
 
 if by_tool:
     lines.append("| Tool | Results |")
@@ -130,13 +163,15 @@ if findings:
     lines.append("<details>")
     lines.append(f"<summary>Top unique findings (up to {max_table})</summary>")
     lines.append("")
-    lines.append("| Sev | Rule | Location | Tools |")
-    lines.append("|-----|------|----------|-------|")
+    lines.append("| Sev | Category | Rule | Location | Tools |")
+    lines.append("|-----|----------|------|----------|-------|")
     for f in findings[:max_table]:
         loc = (f.get("location") or "").replace("|", "\\|")
         tools = ", ".join(f.get("tools") or [])
         rule = (f.get("ruleId") or "").replace("|", "\\|")
-        lines.append(f"| {f.get('severity', '?')} | `{rule}` | `{loc}` | {tools} |")
+        cat = categorize_f(f)
+        sev = normalize_sev(f.get("severity", "?"))
+        lines.append(f"| {sev} | {cat} | `{rule}` | `{loc}` | {tools} |")
     lines.append("")
     lines.append("</details>")
     lines.append("")

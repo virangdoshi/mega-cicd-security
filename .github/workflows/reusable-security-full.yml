@@ -74,6 +74,30 @@ on:
         description: Enable GitHub dependency-review-action in SCA (PR events)
         type: boolean
         default: true
+      profile:
+        description: minimal | standard | audit | soak (empty uses .scankit.yml when config-path set)
+        type: string
+        default: ""
+      config-path:
+        description: Optional .scankit.yml path (workflow inputs override file values)
+        type: string
+        default: ""
+      enable-dast:
+        description: Run optional OWASP ZAP baseline (requires dast-url; trusted refs only)
+        type: boolean
+        default: false
+      dast-url:
+        description: Staging URL for DAST (never production)
+        type: string
+        default: ""
+      notification-webhook:
+        description: Optional Slack/Teams webhook URL for scan summary notifications
+        type: string
+        default: ""
+      enable-notifications:
+        description: Post summary to notification-webhook after publish job
+        type: boolean
+        default: false
 
 permissions:
   # Workflow-level ceiling for nested jobs (GitHub does not allow job scopes
@@ -117,8 +141,57 @@ jobs:
         # Full owner/repo/path@sha — relative ./ resolves to the *caller* repo and breaks cross-repo use
         uses: virangdoshi/scankit/.github/actions/detect-ecosystems@f2d173ced5cb5c875da8ec4ba8cc261988d4a55d
 
+  resolve-settings:
+    name: resolve-settings
+    runs-on: ubuntu-latest
+    outputs:
+      scan_scope: ${{ steps.settings.outputs.scan_scope }}
+      fail_on_severity: ${{ steps.settings.outputs.fail_on_severity }}
+      pr_report_mode: ${{ steps.settings.outputs.pr_report_mode }}
+      enable_dast: ${{ steps.settings.outputs.enable_dast }}
+      dast_url: ${{ steps.settings.outputs.dast_url }}
+      run_secrets: ${{ steps.settings.outputs.run_secrets }}
+      run_sca: ${{ steps.settings.outputs.run_sca }}
+      run_sast: ${{ steps.settings.outputs.run_sast }}
+      run_container: ${{ steps.settings.outputs.run_container }}
+      run_iac: ${{ steps.settings.outputs.run_iac }}
+      run_sbom: ${{ steps.settings.outputs.run_sbom }}
+      run_supply: ${{ steps.settings.outputs.run_supply }}
+      run_privacy: ${{ steps.settings.outputs.run_privacy }}
+      run_api: ${{ steps.settings.outputs.run_api }}
+      run_malware: ${{ steps.settings.outputs.run_malware }}
+      run_meta: ${{ steps.settings.outputs.run_meta }}
+      run_dast: ${{ steps.settings.outputs.run_dast }}
+      enable-codeql: ${{ steps.settings.outputs.enable-codeql }}
+      enable-semgrep: ${{ steps.settings.outputs.enable-semgrep }}
+      enable-bandit: ${{ steps.settings.outputs.enable-bandit }}
+      enable-gosec: ${{ steps.settings.outputs.enable-gosec }}
+      enable-brakeman: ${{ steps.settings.outputs.enable-brakeman }}
+      enable-spotbugs: ${{ steps.settings.outputs.enable-spotbugs }}
+      enable-devskim: ${{ steps.settings.outputs.enable-devskim }}
+      enable-shellcheck: ${{ steps.settings.outputs.enable-shellcheck }}
+      enable-actionlint: ${{ steps.settings.outputs.enable-actionlint }}
+      enable-zizmor: ${{ steps.settings.outputs.enable-zizmor }}
+      enable-harden-runner: ${{ steps.settings.outputs.enable-harden-runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+      - name: Resolve settings
+        id: settings
+        uses: ./.github/actions/resolve-settings
+        with:
+          profile: ${{ inputs.profile }}
+          config-path: ${{ inputs.config-path }}
+          scan-scope: ${{ inputs.scan-scope }}
+          fail-on-severity: ${{ inputs.fail-on-severity }}
+          pr-report-mode: ${{ inputs.pr-report-mode }}
+          enable-dast: ${{ inputs.enable-dast }}
+          dast-url: ${{ inputs.dast-url }}
+
   resolve-scope:
     name: resolve-scan-scope
+    needs: [resolve-settings]
     runs-on: ubuntu-latest
     outputs:
       scan_scope: ${{ steps.scope.outputs.scan_scope }}
@@ -159,24 +232,26 @@ jobs:
         id: scope
         uses: virangdoshi/scankit/.github/actions/resolve-scan-scope@9a80cbd5716e521391b7993fb0cfab26c3f3d442
         with:
-          scan-scope: ${{ inputs.scan-scope }}
+          scan-scope: ${{ needs.resolve-settings.outputs.scan_scope }}
           event-name: ${{ github.event_name }}
           base-sha: ${{ github.event.pull_request.base.sha }}
           head-sha: ${{ github.event.pull_request.head.sha }}
 
   secrets:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_secrets == 'true'
     uses: ./.github/workflows/reusable-secrets.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
       scope_secrets: ${{ needs.resolve-scope.outputs.scope_secrets }}
 
   sca:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sca == 'true'
     permissions:
       contents: read
       security-events: write
@@ -187,7 +262,7 @@ jobs:
     uses: ./.github/workflows/reusable-sca.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       has_python: ${{ needs.detect.outputs.has_python }}
@@ -209,7 +284,8 @@ jobs:
       enable-dependency-review: ${{ inputs.enable-dependency-review }}
 
   sast:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sast == 'true'
     permissions:
       contents: read
       security-events: write
@@ -220,7 +296,7 @@ jobs:
     uses: ./.github/workflows/reusable-sast.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       has_python: ${{ needs.detect.outputs.has_python }}
@@ -229,6 +305,14 @@ jobs:
       has_java: ${{ needs.detect.outputs.has_java }}
       has_shell: ${{ needs.detect.outputs.has_shell }}
       enable-code-build: ${{ inputs.enable-code-build }}
+      enable-codeql: ${{ needs.resolve-settings.outputs.enable-codeql }}
+      enable-semgrep: ${{ needs.resolve-settings.outputs.enable-semgrep }}
+      enable-bandit: ${{ needs.resolve-settings.outputs.enable-bandit }}
+      enable-gosec: ${{ needs.resolve-settings.outputs.enable-gosec }}
+      enable-brakeman: ${{ needs.resolve-settings.outputs.enable-brakeman }}
+      enable-spotbugs: ${{ needs.resolve-settings.outputs.enable-spotbugs }}
+      enable-devskim: ${{ needs.resolve-settings.outputs.enable-devskim }}
+      enable-shellcheck: ${{ needs.resolve-settings.outputs.enable-shellcheck }}
       scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
       scope_sast: ${{ needs.resolve-scope.outputs.scope_sast }}
       scope_go_code: ${{ needs.resolve-scope.outputs.scope_go_code }}
@@ -238,7 +322,8 @@ jobs:
       scope_js_code: ${{ needs.resolve-scope.outputs.scope_js_code }}
 
   container:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_container == 'true'
     permissions:
       contents: read
       security-events: write
@@ -249,7 +334,7 @@ jobs:
     uses: ./.github/workflows/reusable-container.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_docker: ${{ needs.detect.outputs.has_docker }}
       image: ${{ inputs.image }}
@@ -262,7 +347,8 @@ jobs:
       scope_dockerfile: ${{ needs.resolve-scope.outputs.scope_dockerfile }}
 
   iac:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_iac == 'true'
     permissions:
       contents: read
       security-events: write
@@ -273,7 +359,7 @@ jobs:
     uses: ./.github/workflows/reusable-iac.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       has_terraform: ${{ needs.detect.outputs.has_terraform }}
@@ -284,11 +370,12 @@ jobs:
       scope_iac: ${{ needs.resolve-scope.outputs.scope_iac }}
 
   sbom:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_sbom == 'true'
     uses: ./.github/workflows/reusable-sbom.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       enable-scancode: ${{ inputs.enable-scancode }}
@@ -296,7 +383,8 @@ jobs:
       scope_sbom: ${{ needs.resolve-scope.outputs.scope_sbom }}
 
   supply-chain:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_supply == 'true'
     permissions:
       contents: read
       security-events: write
@@ -325,7 +413,8 @@ jobs:
       scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
 
   privacy:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_privacy == 'true'
     permissions:
       contents: read
       security-events: write
@@ -336,7 +425,7 @@ jobs:
     uses: ./.github/workflows/reusable-privacy.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       privacy-paths: ${{ inputs.privacy-paths }}
@@ -344,11 +433,12 @@ jobs:
       scope_privacy: ${{ needs.resolve-scope.outputs.scope_privacy }}
 
   api:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_api == 'true'
     uses: ./.github/workflows/reusable-api.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_openapi: ${{ needs.detect.outputs.has_openapi }}
       has_graphql: ${{ needs.detect.outputs.has_graphql }}
@@ -357,11 +447,12 @@ jobs:
       scope_api: ${{ needs.resolve-scope.outputs.scope_api }}
 
   malware:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_malware == 'true'
     uses: ./.github/workflows/reusable-malware.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_generic_code: ${{ needs.detect.outputs.has_generic_code }}
       has_binary: ${{ needs.detect.outputs.has_binary }}
@@ -375,7 +466,8 @@ jobs:
       scope_any_manifest: ${{ needs.resolve-scope.outputs.scope_any_manifest }}
 
   meta:
-    needs: [detect, resolve-scope]
+    needs: [detect, resolve-scope, resolve-settings]
+    if: needs.resolve-settings.outputs.run_meta == 'true'
     permissions:
       contents: read
       security-events: write
@@ -386,17 +478,30 @@ jobs:
     uses: ./.github/workflows/reusable-meta.yml
     with:
       selection-mode: ${{ inputs.selection-mode }}
-      fail-on-severity: ${{ inputs.fail-on-severity }}
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
       checkout-ref: ${{ inputs.checkout-ref }}
       has_actions: ${{ needs.detect.outputs.has_actions }}
+      enable-actionlint: ${{ needs.resolve-settings.outputs.enable-actionlint }}
+      enable-zizmor: ${{ needs.resolve-settings.outputs.enable-zizmor }}
+      enable-harden-runner: ${{ needs.resolve-settings.outputs.enable-harden-runner }}
       scan-scope: ${{ needs.resolve-scope.outputs.scan_scope }}
       scope_meta: ${{ needs.resolve-scope.outputs.scope_meta }}
       scope_workflows: ${{ needs.resolve-scope.outputs.scope_workflows }}
+
+  dast:
+    needs: [resolve-settings]
+    if: needs.resolve-settings.outputs.enable_dast == 'true' && needs.resolve-settings.outputs.dast_url != ''
+    uses: ./.github/workflows/reusable-dast.yml
+    with:
+      fail-on-severity: ${{ needs.resolve-settings.outputs.fail_on_severity }}
+      checkout-ref: ${{ inputs.checkout-ref }}
+      dast-url: ${{ needs.resolve-settings.outputs.dast_url }}
 
   publish:
     needs:
       - detect
       - resolve-scope
+      - resolve-settings
       - secrets
       - sca
       - sast
@@ -408,6 +513,7 @@ jobs:
       - api
       - malware
       - meta
+      - dast
     if: always() && (inputs.results-publish-mode == 'branch' || inputs.results-publish-mode == 'pull-request')
     permissions:
       contents: write
@@ -423,6 +529,7 @@ jobs:
     needs:
       - detect
       - resolve-scope
+      - resolve-settings
       - secrets
       - sca
       - sast
@@ -434,11 +541,20 @@ jobs:
       - api
       - malware
       - meta
-    if: always() && inputs.pr-report-mode != 'none' && github.event_name == 'pull_request'
+      - dast
+    if: always() && needs.resolve-settings.outputs.pr_report_mode != 'none' && github.event_name == 'pull_request'
     permissions:
       contents: read
       pull-requests: write
       actions: read
     uses: ./.github/workflows/reusable-pr-report.yml
     with:
-      pr-report-mode: ${{ inputs.pr-report-mode }}
+      pr-report-mode: ${{ needs.resolve-settings.outputs.pr_report_mode }}
+
+  notify:
+    needs: [publish]
+    if: always() && inputs.enable-notifications && inputs.notification-webhook != '' && (inputs.results-publish-mode == 'branch' || inputs.results-publish-mode == 'pull-request')
+    uses: ./.github/workflows/reusable-notify.yml
+    with:
+      webhook-url: ${{ inputs.notification-webhook }}
+      results-path: security-results

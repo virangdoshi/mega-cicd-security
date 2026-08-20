@@ -1,0 +1,29 @@
+# Scan-only entrypoint — read-only permission ceiling (no PR comments / git publish).
+# Enable Code Scanning so SARIF uploads appear under Security.
+name: Security — scan only
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+  pull-requests: read
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: OWNER/scankit/.github/workflows/reusable-security-scan.yml@de0865046614b990bf4c242d38a5a4a107df2bbc
+    with:
+      profile: standard
+      selection-mode: detected
+      fail-on-severity: HIGH

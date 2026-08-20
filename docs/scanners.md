@@ -90,7 +90,20 @@ Force a full PR scan with `scan-scope: full`. Category-only workflows default `s
 | actionlint | Meta | `has_actions` | no | true |
 | zizmor | Meta | `has_actions` | no | true |
 | harden-runner | Meta | (self-test jobs) | n/a | true |
+| OWASP ZAP baseline | DAST (optional) | `enable-dast` + `dast-url` | no | false |
+
+## Optional DAST
+
+Enable on **staging URLs only** via `reusable-security-full.yml`:
+
+```yaml
+with:
+  enable-dast: true
+  dast-url: https://staging.example.com
+```
+
+See [`.github/workflows/reusable-dast.yml`](../.github/workflows/reusable-dast.yml). Never point at production.
 
 ## Out of scope
 
-DAST, commercial SCA/SAST, kube-bench (live cluster), OpenSSF Allstar (org app).
+DAST on production, commercial SCA/SAST, kube-bench (live cluster), OpenSSF Allstar (org app). Optional DAST module covers staging baseline scans only.

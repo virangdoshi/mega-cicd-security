@@ -8,7 +8,7 @@
 
 Reusable workflows and copy-paste templates that run dozens of OSS scanners across SCA, SAST, secrets, containers, IaC, SBOM, supply chain, privacy/PII, static API security, malware, and Actions meta-lint. Overlapping tools are intentional. Irrelevant tools are skipped when your repo does not contain matching files. On pull requests, `scan-scope: auto` further limits scans to the changed-file diff, and `pr-report-mode: both` posts a sticky summary plus file/line annotations.
 
-[Scanner inventory](docs/scanners.md) · [Org adoption](docs/adoption.md) · [Upgrade 1.0 → 1.1](docs/upgrade-1.1.md) · [Results publishing](docs/results.md) · [Templates](templates/)
+[Scanner inventory](docs/scanners.md) · [5-minute quickstart](docs/quickstart.md) · [Try the demo](https://github.com/virangdoshi/scankit-demo) · [Org adoption](docs/adoption.md) · [Upgrade 1.2](docs/upgrade-1.2.md) · [Templates](templates/)
 
 ---
 
@@ -62,7 +62,7 @@ concurrency:
 
 jobs:
   security:
-    uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@3cedcb4830bdaf09c99bb543ce59a747b3063885 # pin to commit SHA; bump when upgrading
+    uses: YOUR_ORG/scankit/.github/workflows/reusable-security-full.yml@de0865046614b990bf4c242d38a5a4a107df2bbc # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
@@ -117,6 +117,8 @@ On each run: detect ecosystems → resolve scan scope (diff vs full) → paralle
 | Category | Reusable workflow | Starter template |
 |----------|-------------------|------------------|
 | **Full suite** | [`reusable-security-full.yml`](.github/workflows/reusable-security-full.yml) | [`security-all.yml`](templates/security-all.yml) |
+| **Minimal profile** | same | [`security-minimal.yml`](templates/security-minimal.yml) |
+| **Scan-only (read perms)** | [`reusable-security-scan.yml`](.github/workflows/reusable-security-scan.yml) | [`security-scan-only.yml`](templates/security-scan-only.yml) |
 | **Scheduled + results PR** | same | [`security-all-scheduled.yml`](templates/security-all-scheduled.yml) |
 | **PR report** | [`reusable-pr-report.yml`](.github/workflows/reusable-pr-report.yml) | (wired by the full suite) |
 | SCA | `reusable-sca.yml` | `security-sca.yml` |
@@ -160,6 +162,8 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | Input | Default | Meaning |
 |-------|---------|---------|
 | `selection-mode` | `detected` | `detected` = skip tools for missing ecosystems; `all` = force enabled tools |
+| `profile` | `standard` | `minimal` \| `standard` \| `audit` \| `soak` — preset category/tool sets |
+| `config-path` | — | Optional `.scankit.yml` ([config doc](docs/config.md)) |
 | `scan-scope` | `auto` | `auto` = diff on `pull_request`, full on push/`workflow_dispatch`; or force `diff` / `full` |
 | `fail-on-severity` | `HIGH` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` |
 | `results-publish-mode` | `none` | `none` \| `branch` \| `pull-request` |
@@ -318,9 +322,11 @@ pip-compile --generate-hashes --allow-unsafe --output-file .github/pinned/flare-
 | Doc | Description |
 |-----|-------------|
 | [docs/scanners.md](docs/scanners.md) | Full tool inventory + diff-mode behavior |
-| [docs/adoption.md](docs/adoption.md) | Org rollout, permissions ceiling, scan-scope |
+| [docs/adoption.md](docs/adoption.md) | Org rollout, permissions, profiles, scan-scope |
+| [docs/quickstart.md](docs/quickstart.md) | 5-minute adopt guide |
+| [docs/config.md](docs/config.md) | `.scankit.yml` repo config |
 | [docs/results.md](docs/results.md) | PR report, git publish modes & schedules |
-| [docs/upgrade-1.1.md](docs/upgrade-1.1.md) | Pin bump + new inputs for 1.0 callers |
+| [docs/upgrade-1.2.md](docs/upgrade-1.2.md) | Pin bump + profiles, scan-only, config |
 
 ---
 

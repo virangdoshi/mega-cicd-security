@@ -1,0 +1,9 @@
+# Example scankit repo config — copy to app repo root as .scankit.yml
+profile: standard
+fail-on-severity: HIGH
+scan-scope: auto
+pr-report-mode: both
+results-publish-mode: none
+enable-scancode: false
+enable-dast: false
+# dast-url: https://staging.example.com

@@ -1,0 +1,30 @@
+# Copy into your app repo as .github/workflows/security.yml
+# Minimal profile: secrets + SCA + Semgrep + actionlint (~8 jobs typical).
+name: Security — minimal
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: security-minimal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@de0865046614b990bf4c242d38a5a4a107df2bbc
+    with:
+      profile: minimal
+      selection-mode: detected
+      fail-on-severity: HIGH
+      results-publish-mode: none

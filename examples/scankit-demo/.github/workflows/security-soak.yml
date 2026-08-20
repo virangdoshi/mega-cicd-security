@@ -1,0 +1,25 @@
+name: Security (soak)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+jobs:
+  security:
+    uses: virangdoshi/scankit/.github/workflows/reusable-security-full.yml@de0865046614b990bf4c242d38a5a4a107df2bbc
+    with:
+      profile: soak
+      selection-mode: detected
+      fail-on-severity: NONE
+      pr-report-mode: both
+      results-publish-mode: none

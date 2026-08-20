@@ -670,6 +670,22 @@ for f in \
   templates/security-api.yml \
   templates/security-malware.yml \
   templates/security-meta.yml \
+  templates/security-minimal.yml \
+  templates/security-audit.yml \
+  templates/security-soak.yml \
+  templates/security-scan-only.yml \
+  templates/org-security-policy.yml \
+  scripts/resolve-profile.sh \
+  scripts/load-scankit-config.sh \
+  scripts/merge-scankit-settings.sh \
+  scripts/run-local.sh \
+  scripts/trend-summary.sh \
+  scripts/export-defectdojo.sh \
+  docs/quickstart.md \
+  docs/config.md \
+  docs/performance.md \
+  CONTRIBUTING.md \
+  ROADMAP.md \
   scripts/prepare-scan-paths.sh \
   scripts/verify-sha256.sh \
   docs/scanners.md \
@@ -805,6 +821,76 @@ if grep -q 'scripts/prepare-scan-paths.sh' .github/actions/prepare-scan-paths/ac
   PASS=$((PASS + 1))
 else
   echo "  FAIL  prepare-scan-paths action missing script"
+  FAIL=$((FAIL + 1))
+fi
+
+echo "== resolve-profile =="
+PROF_OUT="$(mktemp)"
+"$ROOT/scripts/resolve-profile.sh" minimal "$PROF_OUT"
+if grep -q 'run_container=false' "$PROF_OUT" && grep -q 'enable-codeql=false' "$PROF_OUT"; then
+  echo "  PASS  minimal profile disables container and codeql"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  minimal profile flags"
+  FAIL=$((FAIL + 1))
+fi
+"$ROOT/scripts/resolve-profile.sh" audit "$PROF_OUT"
+if grep -q 'effective_scan_scope=full' "$PROF_OUT"; then
+  echo "  PASS  audit profile forces full scan"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  audit profile scan scope"
+  FAIL=$((FAIL + 1))
+fi
+rm -f "$PROF_OUT"
+
+echo "== load-scankit-config =="
+CFG="$(mktemp)"
+cat >"$CFG" <<'EOF'
+profile: soak
+fail-on-severity: NONE
+EOF
+LOAD_OUT="$(mktemp)"
+"$ROOT/scripts/load-scankit-config.sh" "$CFG" "$LOAD_OUT"
+if grep -q 'profile=soak' "$LOAD_OUT" && grep -q 'fail-on-severity=NONE' "$LOAD_OUT"; then
+  echo "  PASS  load-scankit-config parses yaml"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  load-scankit-config"
+  FAIL=$((FAIL + 1))
+fi
+rm -f "$CFG" "$LOAD_OUT"
+
+if grep -q 'profile:' .github/workflows/reusable-security-full.yml; then
+  echo "  PASS  full suite has profile input"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite missing profile"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'contents: read' .github/workflows/reusable-security-scan.yml &&
+   ! grep -q 'contents: write' .github/workflows/reusable-security-scan.yml; then
+  echo "  PASS  scan-only workflow read ceiling"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  scan-only permissions"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q 'reusable-dast.yml' .github/workflows/reusable-security-full.yml; then
+  echo "  PASS  full suite wires optional dast"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  full suite missing dast job"
+  FAIL=$((FAIL + 1))
+fi
+
+if [[ -f "$ROOT/examples/scankit-demo/README.md" ]]; then
+  echo "  PASS  demo repo example present"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  demo repo example missing"
   FAIL=$((FAIL + 1))
 fi
 

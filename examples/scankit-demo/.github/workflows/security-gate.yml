@@ -1,0 +1,25 @@
+name: Security (gate)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+jobs:
+  security:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'run-security-gate'
+    uses: virangdoshi/scankit/.github/workflows/reusable-security-full.yml@de0865046614b990bf4c242d38a5a4a107df2bbc
+    with:
+      profile: minimal
+      selection-mode: detected
+      fail-on-severity: HIGH
+      pr-report-mode: comment
+      results-publish-mode: none

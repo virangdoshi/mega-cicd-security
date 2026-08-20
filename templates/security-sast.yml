@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   sast:
-    uses: OWNER/scankit/.github/workflows/reusable-sast.yml@3cedcb4830bdaf09c99bb543ce59a747b3063885 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-sast.yml@de0865046614b990bf4c242d38a5a4a107df2bbc # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
