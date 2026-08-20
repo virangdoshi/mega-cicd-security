@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate preset snippet for caller repos — bump scankit SHA pins",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "description": "Group scankit reusable workflow SHA updates",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["**/scankit/**"],
+      "groupName": "scankit",
+      "schedule": ["before 6am on monday"]
+    }
+  ]
+}

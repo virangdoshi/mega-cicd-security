@@ -1,0 +1,17 @@
+name: Adoption question
+description: Help wiring scankit in your org
+title: "[adoption]: "
+labels: ["question"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Org context (public/private, GHAS, monorepo?)
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to achieve?
+    validations:
+      required: true

@@ -1,0 +1,25 @@
+name: Add scanner
+description: Propose a new OSS scanner for a category workflow
+title: "[scanner]: "
+labels: ["enhancement", "good first issue"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool name and URL
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options: [sca, sast, secrets, container, iac, sbom, supply-chain, privacy, api, malware, meta]
+    validations:
+      required: true
+  - type: checkboxes
+    id: sarif
+    attributes:
+      label: Capabilities
+      options:
+        - label: SARIF output
+        - label: Hash-pinnable install (no curl|sh)

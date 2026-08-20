@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-08-19
+
+### Added
+
+- **Scan profiles** (`profile: minimal | standard | audit | soak`) via `resolve-settings` action and [`scripts/resolve-profile.sh`](scripts/resolve-profile.sh)
+- **Scan-only workflow** [`reusable-security-scan.yml`](.github/workflows/reusable-security-scan.yml) — read-only permission ceiling (no publish/PR comment jobs)
+- **`.scankit.yml` config** — [`scripts/load-scankit-config.sh`](scripts/load-scankit-config.sh), [`load-config`](.github/actions/load-config/) / [`resolve-settings`](.github/actions/resolve-settings/) actions, [`docs/config.md`](docs/config.md)
+- **Optional DAST** — [`reusable-dast.yml`](.github/workflows/reusable-dast.yml) (OWASP ZAP baseline, staging URL only)
+- **Notifications** — [`reusable-notify.yml`](.github/workflows/reusable-notify.yml) + `enable-notifications` / `notification-webhook` inputs
+- **PR triage UX** — category grouping and multi-tool overlap note in [`scripts/pr-report.sh`](scripts/pr-report.sh); `by_category` in dedup JSON
+- New templates: `security-minimal`, `security-audit`, `security-soak`, `security-scan-only`, `org-security-policy`, `scankit.yml.example`
+- Demo app: [virangdoshi/scankit-demo](https://github.com/virangdoshi/scankit-demo) (external repo — intentional findings for soak mode)
+- Docs: [`quickstart.md`](docs/quickstart.md), [`performance.md`](docs/performance.md), [`vs-alternatives.md`](docs/vs-alternatives.md), [`compliance.md`](docs/compliance.md), [`triage.md`](docs/triage.md), [`marketplace.md`](docs/marketplace.md), [`openssf-badge.md`](docs/openssf-badge.md), [`upgrade-1.2.md`](docs/upgrade-1.2.md), [`renovate-preset.json`](docs/renovate-preset.json)
+- Scripts: [`run-local.sh`](scripts/run-local.sh), [`trend-summary.sh`](scripts/trend-summary.sh), [`export-defectdojo.sh`](scripts/export-defectdojo.sh), [`bump-template-pins.sh`](scripts/bump-template-pins.sh)
+- Community: [`CONTRIBUTING.md`](CONTRIBUTING.md), [`ROADMAP.md`](ROADMAP.md), GitHub issue templates
+
+## [1.1.1] — 2026-08-19
+
 ### Fixed
 
 - SCA **Dependency Review**: map scankit `fail-on-severity` (`CRITICAL`/`HIGH`/`MEDIUM`/`LOW`/`NONE`) onto the action’s `critical`/`high`/`moderate`/`low` scale (default `HIGH` was invalid and failed the job). `NONE` uses `warn-only`. Checkout + JSON artifacts. PR/`pull_request_target` only.

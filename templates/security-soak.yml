@@ -1,0 +1,30 @@
+# Soak / intentional-vuln repos — report without failing the workflow.
+name: Security — soak
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: security-soak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e
+    with:
+      profile: soak
+      selection-mode: detected
+      fail-on-severity: NONE
+      pr-report-mode: comment
+      results-publish-mode: none

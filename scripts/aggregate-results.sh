@@ -110,6 +110,29 @@ findings = []
 by_key = {}
 sev_counts = collections.Counter()
 tool_counts = collections.Counter()
+cat_counts = collections.Counter()
+
+def categorize(tool: str, rule_id: str) -> str:
+    t = (tool or "").lower()
+    r = (rule_id or "").lower()
+    blob = t + " " + r
+    if any(x in blob for x in ("gitleaks", "trufflehog", "detect-secrets", "secretlint", "secret")):
+        return "secrets"
+    if any(x in blob for x in ("trivy", "grype", "osv", "dependency", "cargo", "pip-audit", "govuln", "retire", "bundler", "php-security")):
+        return "sca"
+    if any(x in blob for x in ("semgrep", "codeql", "bandit", "gosec", "brakeman", "spotbugs", "devskim", "shellcheck")):
+        return "sast"
+    if any(x in blob for x in ("checkov", "kics", "terraform", "kube", "terrascan", "conftest", "cfn-guard")):
+        return "iac"
+    if any(x in blob for x in ("scorecard", "pinact", "ratchet", "guarddog", "sbom", "slsa")):
+        return "supply-chain"
+    if any(x in blob for x in ("hadolint", "dockle", "dive", "docker")):
+        return "container"
+    if any(x in blob for x in ("bearer", "presidio", "privacy")):
+        return "privacy"
+    if any(x in blob for x in ("spectral", "openapi", "graphql", "vacuum")):
+        return "api"
+    return "other"
 
 for path in artifacts.rglob("*"):
     if not path.is_file():
@@ -141,12 +164,16 @@ for path in artifacts.rglob("*"):
             rule_id = result.get("ruleId") or "unknown"
             msg = ((result.get("message") or {}).get("text") or "")[:200]
             sev = severity_of(result, rules)
+            if sev == "CRITICAL":
+                sev = "HIGH"
+            cat = categorize(tool, rule_id)
             key_src = f"{rule_id}|{loc}|{msg[:80]}"
             key = hashlib.sha1(key_src.encode()).hexdigest()[:16]
             entry = {
                 "key": key,
                 "ruleId": rule_id,
                 "severity": sev,
+                "category": cat,
                 "location": loc,
                 "message": msg,
                 "tools": [tool],
@@ -154,6 +181,7 @@ for path in artifacts.rglob("*"):
             }
             sev_counts[sev] += 1
             tool_counts[tool] += 1
+            cat_counts[cat] += 1
             if key in by_key:
                 existing = by_key[key]
                 if tool not in existing["tools"]:
@@ -170,6 +198,7 @@ deduped = {
     "total_unique": len(findings),
     "by_severity": dict(sev_counts),
     "by_tool": dict(tool_counts),
+    "by_category": dict(cat_counts),
     "findings": sorted(findings, key=lambda f: ({"HIGH":0,"MEDIUM":1,"LOW":2,"UNKNOWN":3}.get(f["severity"], 9), f["ruleId"])),
 }
 (dest / "findings-deduped.json").write_text(json.dumps(deduped, indent=2))
@@ -181,6 +210,11 @@ with summary.open("a") as fh:
     fh.write(f"- Raw SARIF results: **{deduped['total_raw']}**\n")
     fh.write(f"- Unique findings (rule + location + message): **{deduped['total_unique']}**\n")
     fh.write(f"- Reported by multiple tools: **{dup_tools}**\n\n")
+    if cat_counts:
+        fh.write("| Category | Count |\n|----------|-------|\n")
+        for cat, n in sorted(cat_counts.items(), key=lambda x: (-x[1], x[0])):
+            fh.write(f"| {cat} | {n} |\n")
+        fh.write("\n")
     fh.write("| Severity | Count |\n|----------|-------|\n")
     for sev in ("HIGH", "MEDIUM", "LOW", "UNKNOWN"):
         if sev in sev_counts:

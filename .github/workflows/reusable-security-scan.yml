@@ -1,4 +1,4 @@
-name: Reusable Security Full Suite
+name: Reusable Security Scan (read-only ceiling)
 
 on:
   workflow_call:
@@ -16,16 +16,6 @@ on:
         description: auto (diff on PR, full otherwise) | diff | full
         type: string
         default: auto
-      results-publish-mode:
-        type: string
-        default: none
-      results-branch:
-        type: string
-        default: security-results
-      pr-report-mode:
-        description: On pull_request — none | comment | annotations | both (sticky PR summary + workflow annotations)
-        type: string
-        default: both
       image:
         type: string
         default: ""
@@ -90,23 +80,13 @@ on:
         description: Staging URL for DAST (never production)
         type: string
         default: ""
-      notification-webhook:
-        description: Optional Slack/Teams webhook URL for scan summary notifications
-        type: string
-        default: ""
-      enable-notifications:
-        description: Post summary to notification-webhook after publish job
-        type: boolean
-        default: false
 
 permissions:
-  # Workflow-level ceiling for nested jobs (GitHub does not allow job scopes
-  # above this). Must cover SARIF upload + optional publish; callers must match.
-  contents: write
+  contents: read
   security-events: write
   actions: read
   id-token: write
-  pull-requests: write
+  pull-requests: read
   packages: read
 
 jobs:
@@ -185,7 +165,7 @@ jobs:
           config-path: ${{ inputs.config-path }}
           scan-scope: ${{ inputs.scan-scope }}
           fail-on-severity: ${{ inputs.fail-on-severity }}
-          pr-report-mode: ${{ inputs.pr-report-mode }}
+          pr-report-mode: none
           enable-dast: ${{ inputs.enable-dast }}
           dast-url: ${{ inputs.dast-url }}
 
@@ -497,64 +477,3 @@ jobs:
       checkout-ref: ${{ inputs.checkout-ref }}
       dast-url: ${{ needs.resolve-settings.outputs.dast_url }}
 
-  publish:
-    needs:
-      - detect
-      - resolve-scope
-      - resolve-settings
-      - secrets
-      - sca
-      - sast
-      - container
-      - iac
-      - sbom
-      - supply-chain
-      - privacy
-      - api
-      - malware
-      - meta
-      - dast
-    if: always() && (inputs.results-publish-mode == 'branch' || inputs.results-publish-mode == 'pull-request')
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: read
-    uses: ./.github/workflows/reusable-publish-results.yml
-    with:
-      results-publish-mode: ${{ inputs.results-publish-mode }}
-      results-branch: ${{ inputs.results-branch }}
-      results-path: security-results
-
-  pr-report:
-    needs:
-      - detect
-      - resolve-scope
-      - resolve-settings
-      - secrets
-      - sca
-      - sast
-      - container
-      - iac
-      - sbom
-      - supply-chain
-      - privacy
-      - api
-      - malware
-      - meta
-      - dast
-    if: always() && needs.resolve-settings.outputs.pr_report_mode != 'none' && github.event_name == 'pull_request'
-    permissions:
-      contents: read
-      pull-requests: write
-      actions: read
-    uses: ./.github/workflows/reusable-pr-report.yml
-    with:
-      pr-report-mode: ${{ needs.resolve-settings.outputs.pr_report_mode }}
-
-  notify:
-    needs: [publish]
-    if: always() && inputs.enable-notifications && inputs.notification-webhook != '' && (inputs.results-publish-mode == 'branch' || inputs.results-publish-mode == 'pull-request')
-    uses: ./.github/workflows/reusable-notify.yml
-    with:
-      webhook-url: ${{ inputs.notification-webhook }}
-      results-path: security-results

@@ -1,0 +1,41 @@
+name: load-config
+description: Load .scankit.yml key/value settings
+inputs:
+  config-path:
+    description: Path to scankit config file
+    required: false
+    default: .scankit.yml
+outputs:
+  profile:
+    value: ${{ steps.run.outputs.profile }}
+  fail-on-severity:
+    value: ${{ steps.run.outputs.fail-on-severity }}
+  scan-scope:
+    value: ${{ steps.run.outputs.scan-scope }}
+  pr-report-mode:
+    value: ${{ steps.run.outputs.pr-report-mode }}
+  results-publish-mode:
+    value: ${{ steps.run.outputs.results-publish-mode }}
+  enable-scancode:
+    value: ${{ steps.run.outputs.enable-scancode }}
+  dast-url:
+    value: ${{ steps.run.outputs.dast-url }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config-path }}
+        OUT: ${{ runner.temp }}/config.out
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/load-scankit-config.sh" "$CONFIG" "$OUT"
+        if [[ -f "$OUT" ]]; then
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "$line" >> "$GITHUB_OUTPUT"
+          done < "$OUT"
+        fi

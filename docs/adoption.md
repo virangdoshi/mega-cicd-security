@@ -13,7 +13,7 @@ Point app repos at this library:
 ```yaml
 jobs:
   security:
-    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@3cedcb4830bdaf09c99bb543ce59a747b3063885 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH
@@ -56,6 +56,34 @@ Forks of private libraries do **not** inherit reusable-workflow access — point
 | Scan only / publish | `contents: write`, `pull-requests: write`, `security-events: write`, `actions: read`, `id-token: write` (Scorecard), `packages: read` |
 
 `reusable-security-full` declares `contents: write` + `pull-requests: write` at the workflow level (for the optional publish job). The caller must grant at least that ceiling or GitHub fails the run at **startup** with no job logs. Nested reusable workflows declare their own `permissions:` blocks within that ceiling.
+
+## Scan profiles
+
+| Profile | Use case | Behavior |
+|---------|----------|----------|
+| `minimal` | Fast PR feedback | secrets, SCA, Semgrep, actionlint |
+| `standard` | Default full suite | All categories, ecosystem-aware |
+| `audit` | Scheduled / compliance | Full tree, `fail-on-severity: HIGH` |
+| `soak` | Known-bad / demo repos | `fail-on-severity: NONE`, comment-only PR report |
+
+Templates: [`security-minimal.yml`](templates/security-minimal.yml), [`security-audit.yml`](templates/security-audit.yml), [`security-soak.yml`](templates/security-soak.yml).
+
+## Scan-only vs full suite
+
+| Entrypoint | Caller permissions | PR comment | Git publish |
+|------------|-------------------|------------|-------------|
+| `reusable-security-full.yml` | `contents: write`, `pull-requests: write`, … | yes (default) | optional |
+| `reusable-security-scan.yml` | `contents: read`, `security-events: write`, … | no | no |
+
+See [`templates/security-scan-only.yml`](templates/security-scan-only.yml).
+
+## Org wrapper pattern
+
+Publish [`templates/org-security-policy.yml`](templates/org-security-policy.yml) from a central `your-org/security-policy` repo; app repos call one line:
+
+```yaml
+uses: your-org/security-policy/.github/workflows/security.yml@main
+```
 
 ## Selection modes
 

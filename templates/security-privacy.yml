@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   privacy:
-    uses: OWNER/scankit/.github/workflows/reusable-privacy.yml@3cedcb4830bdaf09c99bb543ce59a747b3063885 # pin to commit SHA; bump when upgrading
+    uses: OWNER/scankit/.github/workflows/reusable-privacy.yml@c7197e7783122e34257224c14b355c92a9d1450e # pin to commit SHA; bump when upgrading
     with:
       selection-mode: detected
       fail-on-severity: HIGH

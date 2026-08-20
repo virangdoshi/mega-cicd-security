@@ -1,0 +1,32 @@
+# Scheduled full-tree audit — use with security-minimal on PRs for day-to-day.
+name: Security — audit
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+concurrency:
+  group: security-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e
+    with:
+      profile: audit
+      selection-mode: detected
+      scan-scope: full
+      fail-on-severity: HIGH
+      results-publish-mode: none

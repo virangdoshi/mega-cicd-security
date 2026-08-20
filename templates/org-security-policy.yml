@@ -1,0 +1,29 @@
+# Org policy wrapper — publish as your-org/security-policy, then app repos call this once.
+name: Org security policy
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        type: string
+        default: standard
+      fail-on-severity:
+        type: string
+        default: HIGH
+
+permissions:
+  contents: write
+  pull-requests: write
+  security-events: write
+  actions: read
+  id-token: write
+  packages: read
+
+jobs:
+  security:
+    uses: OWNER/scankit/.github/workflows/reusable-security-full.yml@c7197e7783122e34257224c14b355c92a9d1450e
+    with:
+      profile: ${{ inputs.profile }}
+      selection-mode: detected
+      fail-on-severity: ${{ inputs.fail-on-severity }}
+      results-publish-mode: none
