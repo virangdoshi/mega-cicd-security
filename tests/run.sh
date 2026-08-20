@@ -681,6 +681,9 @@ for f in \
   scripts/run-local.sh \
   scripts/trend-summary.sh \
   scripts/export-defectdojo.sh \
+  scripts/pr-review-comments.sh \
+  scripts/post-pr-review-comments.sh \
+  .github/actions/post-pr-review/action.yml \
   docs/quickstart.md \
   docs/config.md \
   docs/performance.md \
@@ -893,6 +896,115 @@ else
   echo "  FAIL  README missing demo link"
   FAIL=$((FAIL + 1))
 fi
+
+echo "== pr-review-comments =="
+FIXTURE="$(mktemp)"
+OUT="$(mktemp)"
+
+# Basic payload
+cat >"$FIXTURE" <<'EOF'
+{"findings":[{"severity":"HIGH","ruleId":"test-rule","location":"src/app.py:10","message":"Example finding","tools":["semgrep"]}]}
+EOF
+"$ROOT/scripts/pr-review-comments.sh" "$FIXTURE" "$OUT" 5
+if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d["comments"][0]; assert c["path"]=="src/app.py" and c["line"]==10 and c["side"]=="RIGHT" and "scankit-inline" in c["body"] and "**HIGH**" in c["body"]' "$OUT"; then
+  echo "  PASS  pr-review-comments builds inline payload"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-review-comments payload"
+  FAIL=$((FAIL + 1))
+fi
+
+# Skip findings without line
+cat >"$FIXTURE" <<'EOF'
+{"findings":[{"severity":"HIGH","ruleId":"x","location":"no-line-here","message":"m","tools":["t"]},{"severity":"LOW","ruleId":"y","location":"b.py:3","message":"ok","tools":["t"]}]}
+EOF
+"$ROOT/scripts/pr-review-comments.sh" "$FIXTURE" "$OUT" 10
+if python3 -c 'import json,sys; assert len(json.load(open(sys.argv[1]))["comments"])==1' "$OUT"; then
+  echo "  PASS  pr-review-comments skips missing line"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-review-comments line filter"
+  FAIL=$((FAIL + 1))
+fi
+
+# Dedup + cap
+cat >"$FIXTURE" <<'EOF'
+{"findings":[
+  {"severity":"CRITICAL","ruleId":"dup","location":"a.py:1","message":"same","tools":["t1"]},
+  {"severity":"HIGH","ruleId":"dup","location":"a.py:1","message":"same","tools":["t2"]},
+  {"severity":"MEDIUM","ruleId":"r2","location":"a.py:2","message":"two","tools":["t"]},
+  {"severity":"LOW","ruleId":"r3","location":"a.py:3","message":"three","tools":["t"]},
+  {"severity":"LOW","ruleId":"r4","location":"a.py:4","message":"four","tools":["t"]}
+]}
+EOF
+"$ROOT/scripts/pr-review-comments.sh" "$FIXTURE" "$OUT" 2
+if python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["total"]==2; assert "**HIGH**" in d["comments"][0]["body"]' "$OUT"; then
+  echo "  PASS  pr-review-comments dedupes and caps"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-review-comments dedup/cap"
+  FAIL=$((FAIL + 1))
+fi
+
+# Review payload shape (post script builder)
+PAYLOAD="$(mktemp)"
+python3 - "$OUT" "abc123deadbeef" "$PAYLOAD" <<'PY'
+import json, sys
+comments_file, head, out = sys.argv[1], sys.argv[2], sys.argv[3]
+data = json.load(open(comments_file))
+comments = data.get("comments") or []
+payload = {"commit_id": head, "event": "COMMENT", "body": "<!-- scankit-inline -->", "comments": comments}
+json.dump(payload, open(out, "w"))
+PY
+if python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); assert p["event"]=="COMMENT" and p["commit_id"] and isinstance(p["comments"], list)' "$PAYLOAD"; then
+  echo "  PASS  inline review payload shape"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  inline review payload shape"
+  FAIL=$((FAIL + 1))
+fi
+
+# pr-report modes: inline = no workflow annotations; all = sticky comment
+PR_FIXTURE="$(mktemp)"
+cat >"$PR_FIXTURE" <<'EOF'
+{"total_unique":1,"total_raw":1,"by_severity":{"HIGH":1},"by_tool":{"semgrep":1},"findings":[{"severity":"HIGH","ruleId":"r","location":"z.py:5","message":"m","tools":["semgrep"]}]}
+EOF
+COMMENT_ONLY="$(mktemp)"
+INLINE_OUT="$("$ROOT/scripts/pr-report.sh" "$PR_FIXTURE" "$COMMENT_ONLY" inline "" "" 2>&1 || true)"
+if ! grep -q '^::error' <<<"$INLINE_OUT" && ! grep -q '^::warning' <<<"$INLINE_OUT"; then
+  echo "  PASS  pr-report inline mode skips workflow annotations"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report inline emitted annotations"
+  FAIL=$((FAIL + 1))
+fi
+ALL_COMMENT="$(mktemp)"
+"$ROOT/scripts/pr-report.sh" "$PR_FIXTURE" "$ALL_COMMENT" all "" "" >/dev/null
+if grep -q 'scankit-pr-report' "$ALL_COMMENT"; then
+  echo "  PASS  pr-report all mode writes sticky comment"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report all mode comment"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q "post-pr-review" .github/workflows/reusable-pr-report.yml; then
+  echo "  PASS  pr-report workflow wires post-pr-review action"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report missing post-pr-review step"
+  FAIL=$((FAIL + 1))
+fi
+
+if grep -q "inline.*all" .github/workflows/reusable-pr-report.yml; then
+  echo "  PASS  pr-report workflow documents inline/all modes"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL  pr-report missing inline mode docs"
+  FAIL=$((FAIL + 1))
+fi
+
+rm -f "$FIXTURE" "$OUT" "$PAYLOAD" "$PR_FIXTURE" "$COMMENT_ONLY" "$ALL_COMMENT"
 
 echo
 echo "Results: $PASS passed, $FAIL failed"

@@ -17,7 +17,7 @@ Copy [`templates/scankit.yml.example`](../templates/scankit.yml.example) to star
 | `profile` | `minimal` \| `standard` \| `audit` \| `soak` | `standard` |
 | `fail-on-severity` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` | `HIGH` |
 | `scan-scope` | `auto` \| `diff` \| `full` | `auto` |
-| `pr-report-mode` | `none` \| `comment` \| `annotations` \| `both` | `both` |
+| `pr-report-mode` | `none` \| `comment` \| `annotations` \| `inline` \| `both` \| `all` | `both` |
 | `results-publish-mode` | `none` \| `branch` \| `pull-request` | `none` |
 | `enable-scancode` | `true` \| `false` | `false` |
 | `enable-dast` | `true` \| `false` | `false` |

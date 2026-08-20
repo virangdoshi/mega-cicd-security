@@ -5,7 +5,7 @@ Scanners always emit:
 1. **GitHub Actions artifacts** (JSON/SARIF/text per tool)
 2. **Code Scanning alerts** when SARIF upload succeeds (`security-events: write`)
 
-On **pull requests**, optionally post a **sticky PR comment** and/or **workflow annotations** via `pr-report-mode` (default `both`). This is separate from git publish.
+On **pull requests**, optionally post a **sticky PR comment**, **workflow annotations**, and/or **inline review comments** on diff lines via `pr-report-mode` (default `both`). This is separate from git publish.
 
 Optionally persist a summary **into git** via `results-publish-mode` on `reusable-security-full` / `reusable-publish-results`.
 
@@ -13,14 +13,18 @@ Optionally persist a summary **into git** via `results-publish-mode` on `reusabl
 
 | Mode | Behavior |
 |------|----------|
-| `none` | No PR comment or workflow annotations |
+| `none` | No PR feedback |
 | `comment` | Upsert sticky comment (`<!-- scankit-pr-report -->`) with severity rollup + top findings |
-| `annotations` | Emit file/line `::error` / `::warning` / `::notice` annotations (capped per level) |
-| `both` (default) | Comment + annotations |
+| `annotations` | Emit file/line `::error` / `::warning` / `::notice` workflow commands (capped per level) |
+| `inline` | Inline **PR review comments** on diff lines (Files tab threads) |
+| `both` (default) | Sticky comment + workflow annotations |
+| `all` | Sticky comment + workflow annotations + inline review comments |
 
 Runs with `if: always()` after scanners so partial suites still report. Built from the same SARIF dedup as git publish (`findings-deduped.json`); secret-scanner raw artifacts stay excluded.
 
-Annotations are GitHub Actions workflow commands (`::error` / `::warning` / `::notice`) capped per level (10 each). They show on the PR Checks and Files views for that run — not as GitHub review comments. The sticky comment is upserted by HTML marker `<!-- scankit-pr-report -->` using `GITHUB_TOKEN` (`pull-requests: write`). Comment upsert is `continue-on-error` so a permissions miss does not fail the suite.
+**Workflow annotations** are capped at 10 per severity level. **Inline review comments** use the Pull Request Review API; findings need SARIF `path:line` on the PR diff (max 25 per run). Prior inline comments tagged `<!-- scankit-inline -->` are replaced each run. Both use `continue-on-error` so permission or diff mismatches do not fail the suite.
+
+The sticky comment is upserted via `<!-- scankit-pr-report -->` (`pull-requests: write`).
 
 `pr-report-mode` is a no-op on `push` / `workflow_dispatch` / `schedule`. Independent of `results-publish-mode`.
 

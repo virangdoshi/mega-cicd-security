@@ -167,7 +167,7 @@ Standalone category workflows default ecosystem flags to `"true"`. Prefer the fu
 | `scan-scope` | `auto` | `auto` = diff on `pull_request`, full on push/`workflow_dispatch`; or force `diff` / `full` |
 | `fail-on-severity` | `HIGH` | `CRITICAL` \| `HIGH` \| `MEDIUM` \| `LOW` \| `NONE` |
 | `results-publish-mode` | `none` | `none` \| `branch` \| `pull-request` |
-| `pr-report-mode` | `both` | On `pull_request`: `none` \| `comment` \| `annotations` \| `both` (sticky PR summary + file/line annotations) |
+| `pr-report-mode` | `both` | On `pull_request`: `none` \| `comment` \| `annotations` \| `inline` \| `both` \| `all` |
 | `image` / `dockerfile` | — | Container scans; image scanners need a prebuilt `image` unless you opt into a Dockerfile build |
 | `enable-image-build` | `false` | Build from `dockerfile` when `image` is empty (keep off on untrusted PRs) |
 | `enable-code-build` | `false` | Allow CodeQL autobuild / SpotBugs compile (keep off on untrusted PRs) |
@@ -250,12 +250,12 @@ Private library repos need org Actions access so app repos can `uses:` the workf
 |---------|------|
 | **GitHub Code Scanning** | SARIF-capable tools (always attempted) |
 | **Actions artifacts** | Always |
-| **PR comment + annotations** | On `pull_request` when `pr-report-mode` is `comment`, `annotations`, or `both` (default) |
+| **PR comment + annotations + inline** | On `pull_request` when `pr-report-mode` is `comment`, `annotations`, `inline`, `both`, or `all` |
 | **Git `security-results/`** | When `results-publish-mode` is `branch` or `pull-request` |
 
 ```yaml
 with:
-  pr-report-mode: both                 # sticky PR comment + workflow annotations (PR events only)
+  pr-report-mode: all                 # sticky comment + annotations + inline review threads
   results-publish-mode: pull-request   # or branch | none — git snapshot, separate from PR comment
   results-branch: security-results
 ```

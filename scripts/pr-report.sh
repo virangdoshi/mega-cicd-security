@@ -4,7 +4,7 @@
 #
 # Usage:
 #   pr-report.sh <findings-deduped.json> <out-comment.md> [mode] [run-url] [summary.md]
-# mode: comment | annotations | both
+# mode: comment | annotations | inline | both | all
 set -euo pipefail
 
 FINDINGS_JSON="${1:?findings-deduped.json required}"
@@ -88,8 +88,8 @@ def parse_loc(loc: str):
         path = path[2:]
     return path, line
 
-want_comment = mode in ("comment", "both")
-want_ann = mode in ("annotations", "both")
+want_comment = mode in ("comment", "both", "all")
+want_ann = mode in ("annotations", "both", "all")
 
 # --- workflow command annotations (limit per level per step) ---
 if want_ann:

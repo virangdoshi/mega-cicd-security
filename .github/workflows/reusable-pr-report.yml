@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       pr-report-mode:
-        description: none | comment | annotations | both
+        description: none | comment | annotations | inline | both | all (inline = PR review threads on diff lines)
         type: string
         default: both
 
@@ -45,8 +45,17 @@ jobs:
           run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           comment-path: scankit-pr-comment.md
 
+      - name: Post inline PR review comments
+        if: inputs.pr-report-mode == 'inline' || inputs.pr-report-mode == 'all'
+        continue-on-error: true
+        uses: ./.github/actions/post-pr-review
+        with:
+          findings-json: _scankit-pr-report/latest/findings-deduped.json
+          pr-number: ${{ github.event.pull_request.number }}
+          head-sha: ${{ github.event.pull_request.head.sha }}
+
       - name: Upsert sticky PR comment
-        if: inputs.pr-report-mode == 'comment' || inputs.pr-report-mode == 'both'
+        if: inputs.pr-report-mode == 'comment' || inputs.pr-report-mode == 'both' || inputs.pr-report-mode == 'all'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -82,6 +91,7 @@ jobs:
           name: scankit-pr-report
           path: |
             scankit-pr-comment.md
+            scankit-review-comments.json
             _scankit-pr-report/latest/summary.md
             _scankit-pr-report/latest/findings-deduped.json
           if-no-files-found: warn

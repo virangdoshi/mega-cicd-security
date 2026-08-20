@@ -9,7 +9,7 @@ inputs:
     required: false
     default: ""
   mode:
-    description: comment | annotations | both
+    description: comment | annotations | inline | both | all
     required: false
     default: both
   run-url:
