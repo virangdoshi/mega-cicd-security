@@ -1,0 +1,42 @@
+name: Post inline PR review comments
+description: Post scankit findings as inline pull request review comments on diff lines
+inputs:
+  findings-json:
+    description: Path to findings-deduped.json
+    required: true
+  pr-number:
+    description: Pull request number
+    required: true
+  head-sha:
+    description: PR head commit SHA
+    required: true
+  max-comments:
+    description: Maximum inline comments per run
+    required: false
+    default: "25"
+runs:
+  using: composite
+  steps:
+    - name: Build review payload
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        FINDINGS: ${{ inputs.findings-json }}
+        MAX: ${{ inputs.max-comments }}
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/pr-review-comments.sh" "$FINDINGS" scankit-review-comments.json "$MAX"
+
+    - name: Post inline review
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        REPO_ROOT="$(cd "$ACTION_PATH/../../.." && pwd)"
+        bash "${REPO_ROOT}/scripts/post-pr-review-comments.sh" scankit-review-comments.json

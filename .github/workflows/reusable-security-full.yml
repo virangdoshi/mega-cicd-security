@@ -23,7 +23,7 @@ on:
         type: string
         default: security-results
       pr-report-mode:
-        description: On pull_request — none | comment | annotations | both (sticky PR summary + workflow annotations)
+        description: On pull_request — none | comment | annotations | inline | both | all (inline = review threads on diff lines)
         type: string
         default: both
       image:

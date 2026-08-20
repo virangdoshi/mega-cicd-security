@@ -35,8 +35,8 @@ SARIF levels map to **HIGH / MEDIUM / LOW** in the PR report. `CRITICAL` display
 
 ## Recommended workflow
 
-1. **PRs**: fix HIGH from sticky comment or Code Scanning; use `fail-on-severity: HIGH`.
-2. **Noise**: set `pr-report-mode: comment` or `none`.
+1. **PRs**: fix HIGH from sticky comment, **inline review threads** (`pr-report-mode: all`), or Code Scanning; use `fail-on-severity: HIGH`.
+2. **Noise**: set `pr-report-mode: comment` or `none` (skip inline with `both`; use `all` only when you want threads).
 3. **Overlap**: if three SCA tools agree, fix once — do not require three separate tickets.
 4. **Scheduled audit**: `profile: audit` + `results-publish-mode: pull-request` for security team review.
 

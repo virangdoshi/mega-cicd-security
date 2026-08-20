@@ -141,4 +141,4 @@ After each scankit release, either merge the Dependabot PR or manually replace t
 
 ## PR report noise
 
-Default `pr-report-mode: both` posts a sticky summary and file/line annotations. For quieter PRs set `pr-report-mode: comment` (summary only) or `none`. Annotations are most useful when `fail-on-severity` is high and you want Checks/Files highlights; intentional-vuln soak repos often use `fail-on-severity: NONE` plus `pr-report-mode: comment`.
+Default `pr-report-mode: both` posts a sticky summary and workflow annotations. Use `pr-report-mode: all` for **inline review comments** on diff lines (Files tab threads). For quieter PRs set `pr-report-mode: comment` (summary only) or `none`.
