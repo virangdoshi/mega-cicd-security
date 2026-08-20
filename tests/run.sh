@@ -886,11 +886,11 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-if [[ -f "$ROOT/examples/scankit-demo/README.md" ]]; then
-  echo "  PASS  demo repo example present"
+if grep -q 'scankit-demo' "$ROOT/README.md"; then
+  echo "  PASS  README links to demo repo"
   PASS=$((PASS + 1))
 else
-  echo "  FAIL  demo repo example missing"
+  echo "  FAIL  README missing demo link"
   FAIL=$((FAIL + 1))
 fi
 
